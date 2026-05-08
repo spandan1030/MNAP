@@ -152,33 +152,43 @@ export default function ReportsPage() {
     })
     y = (doc as any).lastAutoTable.finalY + 8
 
-    // Section 4 — Money Receipts
-    heading('Section 4 — Money Receipts Summary')
+    // Section 4 — Money Receipts (individual rows)
+    if (y > 220) { doc.addPage(); y = 15 }
+    heading('Section 4 — Money Receipts')
+    const receiptRows = data.receipts.map((r: any) => [
+      r.receipt_type.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      r.serial_number ?? '—',
+      r.customer_name,
+      r.repair_type ?? '—',
+      r.payment_mode.toUpperCase(),
+      formatCurrency(r.amount),
+      r.notes ?? '—',
+    ])
+    receiptRows.push(['', '', '', '', 'TOTAL', formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts), ''])
     autoTable(doc, {
       startY: y,
-      body: [
-        ['Advance Received', formatCurrency(data.totalAdvanceReceipts)],
-        ['SIP Received', formatCurrency(data.totalSIPReceipts)],
-        ['Customer Credit Received', formatCurrency(data.totalCreditReceipts)],
-        ['Repair Receipts', formatCurrency(data.totalRepairReceipts)],
-        ['Grand Total Receipts', formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts)],
-      ],
-      styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
+      head: [['Type', 'Serial No.', 'Customer', 'Repair Type', 'Mode', 'Amount', 'Notes']],
+      body: receiptRows,
+      styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
     })
     y = (doc as any).lastAutoTable.finalY + 8
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 5 — Expenses
+    // Section 5 — Expenses (individual rows)
     heading('Section 5 — Expenses')
+    const expenseRows = data.expenses.map((e: any) => [
+      e.description,
+      e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
+      formatCurrency(e.amount),
+      e.notes ?? '—',
+    ])
+    expenseRows.push(['', 'TOTAL', formatCurrency(data.totalExpenses), ''])
     autoTable(doc, {
       startY: y,
-      head: [['Description', 'Amount', 'Payment Type']],
-      body: [
-        ...data.expenses.map((e: any) => [e.description, formatCurrency(e.amount), e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash']),
-        ['TOTAL EXPENSES', formatCurrency(data.totalExpenses), ''],
-      ],
-      styles: { fontSize: 8 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+      head: [['Description', 'Payment Type', 'Amount', 'Notes']],
+      body: expenseRows,
+      styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
     })
     y = (doc as any).lastAutoTable.finalY + 8
 
@@ -294,35 +304,59 @@ export default function ReportsPage() {
             ]} />
           </ReportSection>
 
-          {/* Section 4 — Money Receipts */}
-          <ReportSection title="Section 4 — Money Receipts Summary">
-            <SummaryTable rows={[
-              ['Advance Received', formatCurrency(data.totalAdvanceReceipts)],
-              ['SIP Received', formatCurrency(data.totalSIPReceipts)],
-              ['Customer Credit Received', formatCurrency(data.totalCreditReceipts)],
-              ['Repair Receipts', formatCurrency(data.totalRepairReceipts)],
-              ['Grand Total Receipts', formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts)],
-            ]} bold={[4]} />
+          {/* Section 4 — Money Receipts (individual rows) */}
+          <ReportSection title="Section 4 — Money Receipts">
+            <table className="w-full text-xs border-collapse">
+              <thead><tr className="bg-gray-50">
+                <th className="text-left p-2 font-medium">Type</th>
+                <th className="text-left p-2 font-medium">Serial No.</th>
+                <th className="text-left p-2 font-medium">Customer</th>
+                <th className="text-left p-2 font-medium">Repair Type</th>
+                <th className="text-left p-2 font-medium">Mode</th>
+                <th className="text-right p-2 font-medium">Amount</th>
+                <th className="text-left p-2 font-medium">Notes</th>
+              </tr></thead>
+              <tbody>
+                {data.receipts.map((r: any) => (
+                  <tr key={r.id} className="border-t border-gray-100">
+                    <td className="p-2 capitalize">{r.receipt_type.replace('_', ' ')}</td>
+                    <td className="p-2">{r.serial_number ?? '—'}</td>
+                    <td className="p-2">{r.customer_name}</td>
+                    <td className="p-2">{r.repair_type ?? '—'}</td>
+                    <td className="p-2 uppercase">{r.payment_mode}</td>
+                    <td className="p-2 text-right">{formatCurrency(r.amount)}</td>
+                    <td className="p-2 text-gray-500">{r.notes ?? '—'}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
+                  <td colSpan={5} className="p-2">Grand Total Receipts</td>
+                  <td className="p-2 text-right">{formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts)}</td>
+                  <td />
+                </tr>
+              </tbody>
+            </table>
           </ReportSection>
 
-          {/* Section 5 — Expenses */}
+          {/* Section 5 — Expenses (individual rows) */}
           <ReportSection title="Section 5 — Expenses">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full text-xs border-collapse">
               <thead><tr className="bg-gray-50">
                 <th className="text-left p-2 font-medium">Description</th>
+                <th className="text-left p-2 font-medium">Payment Type</th>
                 <th className="text-right p-2 font-medium">Amount</th>
-                <th className="text-right p-2 font-medium">Type</th>
+                <th className="text-left p-2 font-medium">Notes</th>
               </tr></thead>
               <tbody>
                 {data.expenses.map((e: any) => (
                   <tr key={e.id} className="border-t border-gray-100">
                     <td className="p-2">{e.description}</td>
+                    <td className="p-2">{e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash'}</td>
                     <td className="p-2 text-right">{formatCurrency(e.amount)}</td>
-                    <td className="p-2 text-right capitalize">{e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash'}</td>
+                    <td className="p-2 text-gray-500">{e.notes ?? '—'}</td>
                   </tr>
                 ))}
-                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
-                  <td className="p-2">Total Expenses</td>
+                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
+                  <td colSpan={2} className="p-2">Total Expenses</td>
                   <td className="p-2 text-right">{formatCurrency(data.totalExpenses)}</td>
                   <td />
                 </tr>
