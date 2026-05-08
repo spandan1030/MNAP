@@ -20,12 +20,13 @@ export default function ArchivalPage() {
     const { data: session } = await supabase.from('day_sessions').select('id, date').eq('date', date).single()
     if (!session) { setLoading(false); return }
 
-    const [bills, receipts, expenses, ogPurchases, drReceipts] = await Promise.all([
+    const [bills, receipts, expenses, ogPurchases, drReceipts, partyPayments] = await Promise.all([
       supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('money_receipts').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('expenses').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('old_gold_purchases').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('direct_receipts').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
+      supabase.from('party_payments').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
     ])
 
     setData({
@@ -34,6 +35,7 @@ export default function ArchivalPage() {
       expenses: expenses.data ?? [],
       ogPurchases: ogPurchases.data ?? [],
       drReceipts: drReceipts.data ?? [],
+      partyPayments: partyPayments.data ?? [],
     })
     setLoading(false)
   }
@@ -45,7 +47,7 @@ export default function ArchivalPage() {
 
   const totalCount = data
     ? filtered(data.bills).length + filtered(data.receipts).length + filtered(data.expenses).length +
-      filtered(data.ogPurchases).length + filtered(data.drReceipts).length
+      filtered(data.ogPurchases).length + filtered(data.drReceipts).length + filtered(data.partyPayments).length
     : 0
 
   return (
@@ -245,6 +247,38 @@ export default function ArchivalPage() {
                         <td className="p-2"><StatusBadge status={r.status} /></td>
                         <td className="p-2 text-gray-400 whitespace-nowrap">{formatDateTime(r.submitted_at)}</td>
                         <td className="p-2">{r.profiles?.name ?? 'Staff'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Section>
+
+          {/* Party Payments */}
+          <Section title={`Payments (Module G) — ${filtered(data.partyPayments).length} entries`}>
+            {filtered(data.partyPayments).length === 0 ? <Empty /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse min-w-[500px]">
+                  <thead><tr className="bg-gray-50 text-left">
+                    <th className="p-2 font-medium">Party</th>
+                    <th className="p-2 font-medium text-right">Amount</th>
+                    <th className="p-2 font-medium">Payment Mode</th>
+                    <th className="p-2 font-medium">Notes</th>
+                    <th className="p-2 font-medium">Status</th>
+                    <th className="p-2 font-medium">Time</th>
+                    <th className="p-2 font-medium">By</th>
+                  </tr></thead>
+                  <tbody>
+                    {filtered(data.partyPayments).map((p: any) => (
+                      <tr key={p.id} className="border-t border-gray-100">
+                        <td className="p-2">{p.party_name}</td>
+                        <td className="p-2 text-right font-medium">{formatCurrency(p.amount)}</td>
+                        <td className="p-2">{p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash'}</td>
+                        <td className="p-2 text-gray-500">{p.notes ?? '—'}</td>
+                        <td className="p-2"><StatusBadge status={p.status} /></td>
+                        <td className="p-2 text-gray-400 whitespace-nowrap">{formatDateTime(p.submitted_at)}</td>
+                        <td className="p-2">{p.profiles?.name ?? 'Staff'}</td>
                       </tr>
                     ))}
                   </tbody>

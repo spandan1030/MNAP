@@ -30,29 +30,32 @@ export default function DayRegisterPage() {
 
     if (data) {
       const opening = (data.register_a_opening ?? 0) + (data.register_b_opening ?? 0)
-      const [sp, mr, ex, ogp, dr] = await Promise.all([
+      const [sp, mr, ex, ogp, dr, pp] = await Promise.all([
         supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
           .eq('sales_bills.day_session_id', data.id).neq('sales_bills.status', 'rejected'),
         supabase.from('money_receipts').select('amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('expenses').select('amount, payment_type').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
+        supabase.from('party_payments').select('amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
       ])
       const cashIn = (sp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
       const rCash = (mr.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
       const cashOut = (ex.data ?? []).filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
       const cashOgpOut = (ogp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
       const cashDrIn = (dr.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
-      setExpectedCash(opening + cashIn + rCash + cashDrIn - cashOut - cashOgpOut)
+      const cashPpOut = (pp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
+      setExpectedCash(opening + cashIn + rCash + cashDrIn - cashOut - cashOgpOut - cashPpOut)
 
-      const [b, r, e, og, drp] = await Promise.all([
+      const [b, r, e, og, drp, ppp] = await Promise.all([
         supabase.from('sales_bills').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
         supabase.from('money_receipts').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
         supabase.from('expenses').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
         supabase.from('old_gold_purchases').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
         supabase.from('direct_receipts').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
+        supabase.from('party_payments').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
       ])
-      setPendingCount((b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (drp.count ?? 0))
+      setPendingCount((b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (drp.count ?? 0) + (ppp.count ?? 0))
     }
     setLoading(false)
   }

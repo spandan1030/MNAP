@@ -149,6 +149,21 @@ export interface DirectReceipt {
   submitter?: Profile
 }
 
+export interface PartyPayment {
+  id: string
+  day_session_id: string
+  party_name: string
+  amount: number
+  payment_mode: 'cash' | 'bank_transfer'
+  notes: string | null
+  status: EntryStatus
+  submitted_by: string
+  submitted_at: string
+  rejection_reason: string | null
+  created_at: string
+  submitter?: Profile
+}
+
 export interface AuditLog {
   id: string
   table_name: string

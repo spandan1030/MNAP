@@ -28,6 +28,7 @@ const staffLinks: NavItem[] = [
   { href: '/staff/expenses', label: 'Expense' },
   { href: '/staff/old-gold-purchase', label: 'Old Gold' },
   { href: '/staff/direct-receipt', label: 'Direct Receipt' },
+  { href: '/staff/payments', label: 'Payment' },
 ]
 
 export function Navbar({ role, userName }: NavbarProps) {

@@ -18,12 +18,13 @@ export default function ReportsPage() {
     const { data: session } = await supabase.from('day_sessions').select('*').eq('date', reportDate).single()
     if (!session) { setLoading(false); return }
 
-    const [billsRes, receiptsRes, expensesRes, ogRes, drRes] = await Promise.all([
+    const [billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes] = await Promise.all([
       supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*)').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('money_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('expenses').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('old_gold_purchases').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('direct_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('party_payments').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
     ])
 
     const bills = billsRes.data ?? []
@@ -31,6 +32,7 @@ export default function ReportsPage() {
     const expenses = expensesRes.data ?? []
     const oldGoldPurchases = ogRes.data ?? []
     const directReceipts = drRes.data ?? []
+    const partyPayments = ppRes.data ?? []
 
     const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? [])
     const goldItems = allLineItems.filter((l: any) => l.metal_type === 'gold')
@@ -46,7 +48,8 @@ export default function ReportsPage() {
     const cashExpenses = expenses.filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
     const cashOldGoldOut = oldGoldPurchases.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
     const cashDirectIn = directReceipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
-    const expectedCash = opening + cashSales + cashReceipts + cashDirectIn - cashExpenses - cashOldGoldOut
+    const cashPartyPayOut = partyPayments.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
+    const expectedCash = opening + cashSales + cashReceipts + cashDirectIn - cashExpenses - cashOldGoldOut - cashPartyPayOut
     const actualClosing = (session.register_a_closing ?? 0) + (session.register_b_closing ?? 0)
 
     setData({
@@ -76,7 +79,9 @@ export default function ReportsPage() {
       totalExpenses: expenses.reduce((s: number, e: any) => s + e.amount, 0),
       totalOldGoldPurchases: oldGoldPurchases.reduce((s: number, p: any) => s + p.total_amount, 0),
       totalDirectReceipts: directReceipts.reduce((s: number, r: any) => s + r.amount, 0),
-      cashSales, cashReceipts, cashExpenses, cashOldGoldOut, cashDirectIn,
+      totalPartyPayments: partyPayments.reduce((s: number, p: any) => s + p.amount, 0),
+      partyPayments,
+      cashSales, cashReceipts, cashExpenses, cashOldGoldOut, cashDirectIn, cashPartyPayOut,
       opening, expectedCash, actualClosing,
       variance: actualClosing - expectedCash,
     })
@@ -233,8 +238,27 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 7 — Expenses
-    heading('Section 7 — Expenses')
+    // Section 7 — Party Payments
+    heading('Section 7 — Payments')
+    const ppRows = data.partyPayments.map((p: any) => [
+      p.party_name,
+      formatCurrency(p.amount),
+      p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
+      p.notes ?? '—',
+    ])
+    if (ppRows.length > 0) {
+      ppRows.push(['TOTAL', formatCurrency(data.totalPartyPayments), '', ''])
+      autoTable(doc, {
+        startY: y, head: [['Party', 'Amount', 'Payment', 'Notes']],
+        body: ppRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 8
+    } else { noRecords('No payments today.') }
+
+    if (y > 220) { doc.addPage(); y = 15 }
+
+    // Section 8 — Expenses
+    heading('Section 8 — Expenses')
     const expenseRows = data.expenses.map((e: any) => [
       e.description,
       e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
@@ -252,8 +276,8 @@ export default function ReportsPage() {
 
     if (y > 200) { doc.addPage(); y = 15 }
 
-    // Section 8 — Cash Register
-    heading('Section 8 — Cash Register Summary')
+    // Section 9 — Cash Register
+    heading('Section 9 — Cash Register Summary')
     autoTable(doc, {
       startY: y,
       body: [
@@ -265,6 +289,7 @@ export default function ReportsPage() {
         ['Cash from Direct Receipts', formatCurrency(data.cashDirectIn)],
         ['Cash Expenses', `− ${formatCurrency(data.cashExpenses)}`],
         ['Cash Old Gold Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
+        ['Cash Payments to Parties', `− ${formatCurrency(data.cashPartyPayOut)}`],
         ['Expected Cash In Hand', formatCurrency(data.expectedCash)],
         ['Register A — Closing', formatCurrency(data.session.register_a_closing ?? 0)],
         ['Register B — Closing', formatCurrency(data.session.register_b_closing ?? 0)],
@@ -493,8 +518,39 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 7 — Expenses */}
-          <ReportSection title="Section 7 — Expenses">
+          {/* Section 7 — Party Payments */}
+          <ReportSection title="Section 7 — Payments">
+            {data.partyPayments.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">No payments today.</p>
+            ) : (
+              <table className="w-full text-xs border-collapse">
+                <thead><tr className="bg-gray-50">
+                  <th className="text-left p-2 font-medium">Party</th>
+                  <th className="text-right p-2 font-medium">Amount</th>
+                  <th className="text-left p-2 font-medium">Payment Mode</th>
+                  <th className="text-left p-2 font-medium">Notes</th>
+                </tr></thead>
+                <tbody>
+                  {data.partyPayments.map((p: any) => (
+                    <tr key={p.id} className="border-t border-gray-100">
+                      <td className="p-2">{p.party_name}</td>
+                      <td className="p-2 text-right">{formatCurrency(p.amount)}</td>
+                      <td className="p-2">{p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash'}</td>
+                      <td className="p-2 text-gray-500">{p.notes ?? '—'}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
+                    <td className="p-2">Total Payments</td>
+                    <td className="p-2 text-right">{formatCurrency(data.totalPartyPayments)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </ReportSection>
+
+          {/* Section 8 — Expenses */}
+          <ReportSection title="Section 8 — Expenses">
             {data.expenses.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No expenses today.</p>
             ) : (
@@ -524,8 +580,8 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 8 — Cash Register */}
-          <ReportSection title="Section 8 — Cash Register Summary">
+          {/* Section 9 — Cash Register */}
+          <ReportSection title="Section 9 — Cash Register Summary">
             <SummaryTable rows={[
               ['Register A — Opening Balance', formatCurrency(data.session.register_a_opening)],
               ['Register B — Opening Balance', formatCurrency(data.session.register_b_opening)],
@@ -535,6 +591,7 @@ export default function ReportsPage() {
               ['Cash from Direct Receipts', formatCurrency(data.cashDirectIn)],
               ['Cash Expenses', `− ${formatCurrency(data.cashExpenses)}`],
               ['Cash Old Gold Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
+              ['Cash Payments to Parties', `− ${formatCurrency(data.cashPartyPayOut)}`],
               ['Expected Cash In Hand', formatCurrency(data.expectedCash)],
               ['Register A — Closing Balance', formatCurrency(data.session.register_a_closing ?? 0)],
               ['Register B — Closing Balance', formatCurrency(data.session.register_b_closing ?? 0)],

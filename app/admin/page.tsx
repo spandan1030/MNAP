@@ -16,13 +16,14 @@ export default async function AdminDashboard() {
   if (session) {
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
 
-    const [salesRes, receiptsRes, expensesRes, ogpRes, drRes] = await Promise.all([
+    const [salesRes, receiptsRes, expensesRes, ogpRes, drRes, ppRes] = await Promise.all([
       supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
         .eq('sales_bills.day_session_id', session.id).neq('sales_bills.status', 'rejected'),
       supabase.from('money_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('expenses').select('amount, payment_type').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
+      supabase.from('party_payments').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
     ])
 
     const cashIn = (salesRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
@@ -30,19 +31,21 @@ export default async function AdminDashboard() {
     const cashOut = (expensesRes.data ?? []).filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
     const cashOgpOut = (ogpRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
     const cashDrIn = (drRes.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
+    const cashPpOut = (ppRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
 
-    liveCash = opening + cashIn + receiptCashIn + cashDrIn - cashOut - cashOgpOut
+    liveCash = opening + cashIn + receiptCashIn + cashDrIn - cashOut - cashOgpOut - cashPpOut
     todaySales = (salesRes.data ?? []).reduce((s: number, p: any) => s + p.amount, 0)
     todayExpenses = (expensesRes.data ?? []).reduce((s: number, e: any) => s + e.amount, 0)
 
-    const [b, r, e, og, dr] = await Promise.all([
+    const [b, r, e, og, dr, pp] = await Promise.all([
       supabase.from('sales_bills').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
       supabase.from('money_receipts').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
       supabase.from('expenses').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
       supabase.from('old_gold_purchases').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
       supabase.from('direct_receipts').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
+      supabase.from('party_payments').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
     ])
-    pendingCount = (b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (dr.count ?? 0)
+    pendingCount = (b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (dr.count ?? 0) + (pp.count ?? 0)
   }
 
   return (

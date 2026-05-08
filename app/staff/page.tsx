@@ -10,12 +10,13 @@ export default async function StaffHome() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [bills, receipts, expenses, ogPurchases, drReceipts] = await Promise.all([
+  const [bills, receipts, expenses, ogPurchases, drReceipts, partyPayments] = await Promise.all([
     supabase.from('sales_bills').select('id, bill_number, total_amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
     supabase.from('money_receipts').select('id, receipt_type, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
     supabase.from('expenses').select('id, description, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
     supabase.from('old_gold_purchases').select('id, customer_name, total_amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
     supabase.from('direct_receipts').select('id, customer_name, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('party_payments').select('id, party_name, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
   ])
 
   return (
@@ -37,6 +38,7 @@ export default async function StaffHome() {
         <ActionCard href="/staff/expenses" label="Expense" icon="📋" />
         <ActionCard href="/staff/old-gold-purchase" label="Old Gold" icon="🥇" />
         <ActionCard href="/staff/direct-receipt" label="Direct Receipt" icon="📥" />
+        <ActionCard href="/staff/payments" label="Payment" icon="💸" />
       </div>
 
       <div className="space-y-4">
@@ -54,6 +56,9 @@ export default async function StaffHome() {
         }))} />
         <RecentList title="Recent Expenses" items={(expenses.data ?? []).map(e => ({
           id: e.id, label: e.description, value: `₹${e.amount}`, status: e.status, time: e.submitted_at
+        }))} />
+        <RecentList title="Recent Payments" items={(partyPayments.data ?? []).map(p => ({
+          id: p.id, label: p.party_name, value: `₹${p.amount}`, status: p.status, time: p.submitted_at
         }))} />
       </div>
     </div>
