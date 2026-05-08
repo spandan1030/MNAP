@@ -18,13 +18,14 @@ export default function ReportsPage() {
     const { data: session } = await supabase.from('day_sessions').select('*').eq('date', reportDate).single()
     if (!session) { setLoading(false); return }
 
-    const [billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes] = await Promise.all([
+    const [billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes, asRes] = await Promise.all([
       supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*)').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('money_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('expenses').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('old_gold_purchases').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('direct_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('party_payments').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('approval_sales').select('*, approval_sale_items(*)').eq('day_session_id', session.id).eq('status', 'approved'),
     ])
 
     const bills = billsRes.data ?? []
@@ -33,6 +34,7 @@ export default function ReportsPage() {
     const oldGoldPurchases = ogRes.data ?? []
     const directReceipts = drRes.data ?? []
     const partyPayments = ppRes.data ?? []
+    const approvalSales = asRes.data ?? []
 
     const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? [])
     const goldItems = allLineItems.filter((l: any) => l.metal_type === 'gold')
@@ -80,7 +82,7 @@ export default function ReportsPage() {
       totalOldGoldPurchases: oldGoldPurchases.reduce((s: number, p: any) => s + p.total_amount, 0),
       totalDirectReceipts: directReceipts.reduce((s: number, r: any) => s + r.amount, 0),
       totalPartyPayments: partyPayments.reduce((s: number, p: any) => s + p.amount, 0),
-      partyPayments,
+      partyPayments, approvalSales,
       cashSales, cashReceipts, cashExpenses, cashOldGoldOut, cashDirectIn, cashPartyPayOut,
       opening, expectedCash, actualClosing,
       variance: actualClosing - expectedCash,
@@ -276,8 +278,30 @@ export default function ReportsPage() {
 
     if (y > 200) { doc.addPage(); y = 15 }
 
-    // Section 9 — Cash Register
-    heading('Section 9 — Cash Register Summary')
+    if (y > 220) { doc.addPage(); y = 15 }
+
+    // Section 9 — Approval / Other Party Sales
+    heading('Section 9 — Approval / Other Party Sales')
+    const asRows = data.approvalSales.flatMap((s: any) =>
+      (s.approval_sale_items ?? []).map((l: any, i: number) => [
+        i === 0 ? s.party_name : '',
+        i === 0 ? (s.transaction_type === 'sale' ? 'Party Sale' : 'Approval') : '',
+        l.item_name, l.metal_type, l.purity ?? '—', l.party,
+        l.weight ? `${l.weight}g` : '—', l.notes ?? '—',
+      ])
+    )
+    if (asRows.length > 0) {
+      autoTable(doc, {
+        startY: y, head: [['Party', 'Type', 'Item', 'Metal', 'Purity', 'Party (Stock)', 'Weight', 'Notes']],
+        body: asRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 8
+    } else { noRecords('No approval or party sale entries today.') }
+
+    if (y > 200) { doc.addPage(); y = 15 }
+
+    // Section 10 — Cash Register
+    heading('Section 10 — Cash Register Summary')
     autoTable(doc, {
       startY: y,
       body: [
@@ -580,8 +604,48 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 9 — Cash Register */}
-          <ReportSection title="Section 9 — Cash Register Summary">
+          {/* Section 9 — Approval / Other Party Sales */}
+          <ReportSection title="Section 9 — Approval / Other Party Sales">
+            {data.approvalSales.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">No approval or party sale entries today.</p>
+            ) : (
+              <div className="space-y-4">
+                {data.approvalSales.map((s: any) => (
+                  <div key={s.id} className="border border-gray-100 rounded-lg p-3">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-semibold uppercase text-amber-700">{s.transaction_type === 'sale' ? 'Party Sale' : 'Approval'}</span>
+                      <span className="text-sm font-medium text-gray-900">{s.party_name}</span>
+                    </div>
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-gray-50">
+                        <th className="text-left p-1.5 font-medium">Item</th>
+                        <th className="text-left p-1.5 font-medium">Metal</th>
+                        <th className="text-left p-1.5 font-medium">Purity</th>
+                        <th className="text-left p-1.5 font-medium">Party</th>
+                        <th className="text-right p-1.5 font-medium">Weight</th>
+                        <th className="text-left p-1.5 font-medium">Notes</th>
+                      </tr></thead>
+                      <tbody>
+                        {(s.approval_sale_items ?? []).map((l: any) => (
+                          <tr key={l.id} className="border-t border-gray-100">
+                            <td className="p-1.5">{l.item_name}</td>
+                            <td className="p-1.5 capitalize">{l.metal_type}</td>
+                            <td className="p-1.5">{l.purity ?? '—'}</td>
+                            <td className="p-1.5">{l.party}</td>
+                            <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
+                            <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ReportSection>
+
+          {/* Section 10 — Cash Register */}
+          <ReportSection title="Section 10 — Cash Register Summary">
             <SummaryTable rows={[
               ['Register A — Opening Balance', formatCurrency(data.session.register_a_opening)],
               ['Register B — Opening Balance', formatCurrency(data.session.register_b_opening)],

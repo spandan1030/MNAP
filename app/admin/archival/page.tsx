@@ -20,13 +20,14 @@ export default function ArchivalPage() {
     const { data: session } = await supabase.from('day_sessions').select('id, date').eq('date', date).single()
     if (!session) { setLoading(false); return }
 
-    const [bills, receipts, expenses, ogPurchases, drReceipts, partyPayments] = await Promise.all([
+    const [bills, receipts, expenses, ogPurchases, drReceipts, partyPayments, approvalSales] = await Promise.all([
       supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('money_receipts').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('expenses').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('old_gold_purchases').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('direct_receipts').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
       supabase.from('party_payments').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
+      supabase.from('approval_sales').select('*, approval_sale_items(*), profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
     ])
 
     setData({
@@ -36,6 +37,7 @@ export default function ArchivalPage() {
       ogPurchases: ogPurchases.data ?? [],
       drReceipts: drReceipts.data ?? [],
       partyPayments: partyPayments.data ?? [],
+      approvalSales: approvalSales.data ?? [],
     })
     setLoading(false)
   }
@@ -47,7 +49,8 @@ export default function ArchivalPage() {
 
   const totalCount = data
     ? filtered(data.bills).length + filtered(data.receipts).length + filtered(data.expenses).length +
-      filtered(data.ogPurchases).length + filtered(data.drReceipts).length + filtered(data.partyPayments).length
+      filtered(data.ogPurchases).length + filtered(data.drReceipts).length + filtered(data.partyPayments).length +
+      filtered(data.approvalSales).length
     : 0
 
   return (
@@ -283,6 +286,51 @@ export default function ArchivalPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </Section>
+
+          {/* Approval / Other Party Sales */}
+          <Section title={`Approval / Other Party Sales (Module H) — ${filtered(data.approvalSales).length} entries`}>
+            {filtered(data.approvalSales).length === 0 ? <Empty /> : (
+              <div className="space-y-3">
+                {filtered(data.approvalSales).map((s: any) => (
+                  <div key={s.id} className="border border-gray-100 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase text-amber-700">{s.transaction_type === 'sale' ? 'Party Sale' : 'Approval'}</span>
+                        <span className="text-sm font-medium text-gray-900">{s.party_name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={s.status} />
+                        <span className="text-xs text-gray-400">{formatDateTime(s.submitted_at)}</span>
+                        <span className="text-xs text-gray-500">{s.profiles?.name ?? 'Staff'}</span>
+                      </div>
+                    </div>
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-gray-50 text-left">
+                        <th className="p-1.5 font-medium">Item</th>
+                        <th className="p-1.5 font-medium">Metal</th>
+                        <th className="p-1.5 font-medium">Purity</th>
+                        <th className="p-1.5 font-medium">Party</th>
+                        <th className="p-1.5 font-medium text-right">Weight</th>
+                        <th className="p-1.5 font-medium">Notes</th>
+                      </tr></thead>
+                      <tbody>
+                        {(s.approval_sale_items ?? []).map((l: any) => (
+                          <tr key={l.id} className="border-t border-gray-100">
+                            <td className="p-1.5">{l.item_name}</td>
+                            <td className="p-1.5 capitalize">{l.metal_type}</td>
+                            <td className="p-1.5">{l.purity ?? '—'}</td>
+                            <td className="p-1.5">{l.party}</td>
+                            <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
+                            <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
               </div>
             )}
           </Section>

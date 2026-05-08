@@ -149,6 +149,31 @@ export interface DirectReceipt {
   submitter?: Profile
 }
 
+export interface ApprovalSaleItem {
+  id: string
+  sale_id: string
+  item_name: string
+  metal_type: MetalType
+  purity: string | null
+  party: string
+  weight: number | null
+  notes: string | null
+}
+
+export interface ApprovalSale {
+  id: string
+  day_session_id: string
+  party_name: string
+  transaction_type: 'sale' | 'approval'
+  status: EntryStatus
+  submitted_by: string
+  submitted_at: string
+  rejection_reason: string | null
+  created_at: string
+  approval_sale_items?: ApprovalSaleItem[]
+  submitter?: Profile
+}
+
 export interface PartyPayment {
   id: string
   day_session_id: string

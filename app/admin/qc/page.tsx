@@ -6,7 +6,7 @@ import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
 type FilterStatus = 'pending' | 'approved' | 'rejected' | 'edited' | 'all'
-type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses' | 'old_gold' | 'direct' | 'payments'
+type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses' | 'old_gold' | 'direct' | 'payments' | 'approvals'
 
 interface AuditEntry { field_name: string; original_value: string; edited_value: string; edit_reason: string; edited_at: string }
 
@@ -14,6 +14,7 @@ function getTableName(type: string): string {
   const map: Record<string, string> = {
     sales: 'sales_bills', receipt: 'money_receipts', expense: 'expenses',
     old_gold: 'old_gold_purchases', direct: 'direct_receipts', payment: 'party_payments',
+    approval_sale: 'approval_sales',
   }
   return map[type] ?? 'expenses'
 }
@@ -24,7 +25,8 @@ function getEntryLabel(type: string, data: any): string {
   if (type === 'expense') return `Expense — ${data.description}`
   if (type === 'old_gold') return `Old Gold Purchase — ${data.customer_name}`
   if (type === 'direct') return `Direct Receipt — ${data.customer_name}`
-  return `Payment — ${data.party_name}`
+  if (type === 'payment') return `Payment — ${data.party_name}`
+  return `${data.transaction_type === 'sale' ? 'Party Sale' : 'Approval'} — ${data.party_name}`
 }
 
 export default function QCPage() {
@@ -37,6 +39,7 @@ export default function QCPage() {
   const [oldGoldPurchases, setOldGoldPurchases] = useState<any[]>([])
   const [directReceipts, setDirectReceipts] = useState<any[]>([])
   const [partyPayments, setPartyPayments] = useState<any[]>([])
+  const [approvalSales, setApprovalSales] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<{ type: string; data: any } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -55,7 +58,7 @@ export default function QCPage() {
     const applyFilter = (res: any) =>
       statusFilter ? { data: (res.data ?? []).filter((x: any) => x.status === statusFilter) } : res
 
-    const [b, r, e, og, dr, pp] = await Promise.all([
+    const [b, r, e, og, dr, pp, as_] = await Promise.all([
       filterModule === 'all' || filterModule === 'sales'
         ? supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)')
             .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
@@ -80,6 +83,10 @@ export default function QCPage() {
         ? supabase.from('party_payments').select('*, profiles!submitted_by(name)')
             .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
+      filterModule === 'all' || filterModule === 'approvals'
+        ? supabase.from('approval_sales').select('*, approval_sale_items(*), profiles!submitted_by(name)')
+            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
+        : { data: [] },
     ])
 
     setBills(b.data ?? [])
@@ -88,6 +95,7 @@ export default function QCPage() {
     setOldGoldPurchases(og.data ?? [])
     setDirectReceipts(dr.data ?? [])
     setPartyPayments(pp.data ?? [])
+    setApprovalSales(as_.data ?? [])
     setLoading(false)
   }, [filterStatus, filterModule])
 
@@ -142,6 +150,7 @@ export default function QCPage() {
     ...oldGoldPurchases.map(o => ({ type: 'old_gold', data: o })),
     ...directReceipts.map(d => ({ type: 'direct', data: d })),
     ...partyPayments.map(p => ({ type: 'payment', data: p })),
+    ...approvalSales.map(a => ({ type: 'approval_sale', data: a })),
   ].sort((a, b) => new Date(b.data.submitted_at).getTime() - new Date(a.data.submitted_at).getTime())
 
   return (
@@ -152,7 +161,7 @@ export default function QCPage() {
         <FilterGroup label="Status" value={filterStatus} onChange={v => setFilterStatus(v as FilterStatus)}
           options={['pending', 'approved', 'rejected', 'edited', 'all']} />
         <FilterGroup label="Module" value={filterModule} onChange={v => setFilterModule(v as FilterModule)}
-          options={['all', 'sales', 'receipts', 'expenses', 'old_gold', 'direct', 'payments']}
+          options={['all', 'sales', 'receipts', 'expenses', 'old_gold', 'direct', 'payments', 'approvals']}
           labels={{ old_gold: 'old gold' }} />
       </div>
 
@@ -203,6 +212,7 @@ export default function QCPage() {
               {selected.type === 'old_gold' && <OldGoldDetail data={selected.data} />}
               {selected.type === 'direct' && <DirectReceiptDetail data={selected.data} />}
               {selected.type === 'payment' && <PartyPaymentDetail data={selected.data} />}
+              {selected.type === 'approval_sale' && <ApprovalSaleDetail data={selected.data} />}
 
               {auditLog.length > 0 && (
                 <div className="border-t border-gray-100 pt-3">
@@ -269,7 +279,11 @@ function EntryRow({ type, data, onOpen }: { type: string; data: any; onOpen: () 
         <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(data.submitted_at)} · {data.profiles?.name ?? 'Staff'}</p>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-gray-700">{formatCurrency(data.total_amount ?? data.amount)}</span>
+        <span className="text-sm font-semibold text-gray-700">
+          {(data.total_amount != null || data.amount != null)
+            ? formatCurrency(data.total_amount ?? data.amount)
+            : `${(data.approval_sale_items ?? []).length} item(s)`}
+        </span>
         <StatusBadge status={data.status} />
       </div>
     </div>
@@ -369,6 +383,42 @@ function OldGoldDetail({ data }: { data: any }) {
         ['Payment Mode', data.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash'],
         ...(data.notes ? [['Notes', data.notes] as [string, string]] : []),
       ]} />
+    </div>
+  )
+}
+
+function ApprovalSaleDetail({ data }: { data: any }) {
+  return (
+    <div className="space-y-3 text-sm">
+      <InfoGrid items={[
+        ['Party', data.party_name],
+        ['Type', data.transaction_type === 'sale' ? 'Party Sale' : 'Approval'],
+      ]} />
+      <div>
+        <p className="text-xs font-semibold text-gray-500 mb-1">Items</p>
+        <table className="w-full text-xs border-collapse">
+          <thead><tr className="bg-gray-50">
+            <th className="text-left p-1.5 font-medium">Item</th>
+            <th className="text-left p-1.5 font-medium">Metal</th>
+            <th className="text-left p-1.5 font-medium">Purity</th>
+            <th className="text-left p-1.5 font-medium">Party</th>
+            <th className="text-right p-1.5 font-medium">Weight</th>
+            <th className="text-left p-1.5 font-medium">Notes</th>
+          </tr></thead>
+          <tbody>
+            {(data.approval_sale_items ?? []).map((l: any) => (
+              <tr key={l.id} className="border-t border-gray-100">
+                <td className="p-1.5">{l.item_name}</td>
+                <td className="p-1.5 capitalize">{l.metal_type}</td>
+                <td className="p-1.5">{l.purity ?? '—'}</td>
+                <td className="p-1.5">{l.party}</td>
+                <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
+                <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
