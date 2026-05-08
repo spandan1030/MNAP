@@ -127,7 +127,7 @@ export default function SalesPage() {
 
     if (billErr || !bill) { setError(billErr?.message ?? 'Failed to save bill.'); setSubmitting(false); return }
 
-    await Promise.all([
+    const [itemsRes, paymentsRes] = await Promise.all([
       supabase.from('sales_line_items').insert(
         lineItems.map(l => ({
           bill_id: bill.id,
@@ -149,6 +149,9 @@ export default function SalesPage() {
         }))
       ),
     ])
+
+    if (itemsRes.error) { setError('Bill saved but line items failed: ' + itemsRes.error.message); setSubmitting(false); return }
+    if (paymentsRes.error) { setError('Bill saved but payments failed: ' + paymentsRes.error.message); setSubmitting(false); return }
 
     setSuccess(true)
     setSubmitting(false)
