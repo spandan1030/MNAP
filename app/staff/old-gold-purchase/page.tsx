@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { PURITY_OPTIONS } from '@/lib/utils'
 
 export default function OldGoldPurchasePage() {
   const supabase = createClient()
@@ -22,11 +21,6 @@ export default function OldGoldPurchasePage() {
   const [notes, setNotes] = useState('')
 
   useEffect(() => { loadSession() }, [])
-
-  useEffect(() => {
-    const purities = PURITY_OPTIONS[metalType]
-    if (purities.length > 0) setPurity(purities[0])
-  }, [metalType])
 
   useEffect(() => {
     const w = parseFloat(weight)
@@ -98,10 +92,8 @@ export default function OldGoldPurchasePage() {
             </select>
           </div>
           <div>
-            <label className="label">Purity</label>
-            <select value={purity} onChange={e => setPurity(e.target.value)} className="input">
-              {PURITY_OPTIONS[metalType].map(p => <option key={p}>{p}</option>)}
-            </select>
+            <label className="label">Expected Purity</label>
+            <input value={purity} onChange={e => setPurity(e.target.value)} className="input" placeholder="e.g. 22K, 18K, 916…" />
           </div>
           <Field label="Weight (g) *" value={weight} onChange={setWeight} type="number" required />
           <Field label="Rate per Gram (₹)" value={ratePerGram} onChange={setRatePerGram} type="number" />
