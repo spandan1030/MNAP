@@ -32,12 +32,10 @@ export default function ReportsPage() {
     const oldGoldPurchases = ogRes.data ?? []
     const directReceipts = drRes.data ?? []
 
-    const goldBills = bills.filter((b: any) => b.metal_type === 'gold')
-    const silverBills = bills.filter((b: any) => b.metal_type === 'silver')
-    const otherBills = bills.filter((b: any) => b.metal_type === 'other')
-
-    const sumWeight = (bs: any[]) => bs.flatMap((b: any) => b.sales_line_items ?? []).reduce((s: number, l: any) => s + (l.weight ?? 0), 0)
-    const sumAmount = (bs: any[]) => bs.reduce((s: number, b: any) => s + b.total_amount, 0)
+    const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? [])
+    const goldItems = allLineItems.filter((l: any) => l.metal_type === 'gold')
+    const silverItems = allLineItems.filter((l: any) => l.metal_type === 'silver')
+    const otherItems = allLineItems.filter((l: any) => l.metal_type === 'other')
     const sumPayments = (bs: any[], mode: string) =>
       bs.flatMap((b: any) => b.sales_payments ?? []).filter((p: any) => p.payment_mode === mode).reduce((s: number, p: any) => s + p.amount, 0)
 
@@ -53,9 +51,12 @@ export default function ReportsPage() {
 
     setData({
       session, bills, receipts, expenses, oldGoldPurchases, directReceipts,
-      goldWeight: sumWeight(goldBills), goldAmount: sumAmount(goldBills),
-      silverWeight: sumWeight(silverBills), silverAmount: sumAmount(silverBills),
-      otherCount: otherBills.length, otherAmount: sumAmount(otherBills),
+      goldWeight: goldItems.reduce((s: number, l: any) => s + (l.weight ?? 0), 0),
+      goldAmount: goldItems.reduce((s: number, l: any) => s + l.amount, 0),
+      silverWeight: silverItems.reduce((s: number, l: any) => s + (l.weight ?? 0), 0),
+      silverAmount: silverItems.reduce((s: number, l: any) => s + l.amount, 0),
+      otherCount: otherItems.length,
+      otherAmount: otherItems.reduce((s: number, l: any) => s + l.amount, 0),
       oldGoldWeight: bills.reduce((s: number, b: any) => s + (b.old_gold_weight ?? 0), 0),
       oldGoldAmount: bills.reduce((s: number, b: any) => s + (b.old_gold_amount ?? 0), 0),
       oldSilverWeight: bills.reduce((s: number, b: any) => s + (b.old_silver_weight ?? 0), 0),
@@ -114,16 +115,17 @@ export default function ReportsPage() {
     // Section 1 — Sales Register
     heading('Section 1 — Sales Register')
     const salesRows = data.bills.flatMap((b: any) =>
-      (b.sales_line_items ?? []).map((l: any) => [
-        b.customer_name, l.item_name, b.metal_type, b.purity ?? '—',
+      (b.sales_line_items ?? []).map((l: any, i: number) => [
+        i === 0 ? b.customer_name : '', l.item_name,
+        l.metal_type, l.purity ?? '—', l.party ?? '—',
         l.weight ? `${l.weight}g` : '—', `₹${l.amount.toFixed(2)}`,
-        b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
-        b.old_silver_weight ? `${b.old_silver_weight}g` : '—',
+        i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
+        i === 0 && b.old_silver_weight ? `${b.old_silver_weight}g` : '—',
       ])
     )
     if (salesRows.length > 0) {
       autoTable(doc, {
-        startY: y, head: [['Customer', 'Item', 'Metal', 'Purity', 'Weight', 'Amount', 'Old Gold', 'Old Silver']],
+        startY: y, head: [['Customer', 'Item', 'Metal', 'Purity', 'Party', 'Weight', 'Amount', 'Old Gold', 'Old Silver']],
         body: salesRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
       })
       y = (doc as any).lastAutoTable.finalY + 8
@@ -305,8 +307,20 @@ export default function ReportsPage() {
           {/* Section 1 — Sales Register */}
           <ReportSection title="Section 1 — Sales Register">
             {['gold', 'silver', 'other'].map(metal => {
-              const metalBills = data.bills.filter((b: any) => b.metal_type === metal)
-              if (!metalBills.length) return null
+              const metalItems = data.bills.flatMap((b: any) =>
+                (b.sales_line_items ?? [])
+                  .filter((l: any) => l.metal_type === metal)
+                  .map((l: any, lIdx: number) => ({
+                    ...l,
+                    customer_name: b.customer_name,
+                    isFirstInBill: lIdx === 0,
+                    old_gold_weight: b.old_gold_weight,
+                    old_gold_amount: b.old_gold_amount,
+                    old_silver_weight: b.old_silver_weight,
+                    old_silver_amount: b.old_silver_amount,
+                  }))
+              )
+              if (!metalItems.length) return null
               return (
                 <div key={metal} className="mb-4">
                   <p className="text-xs font-semibold uppercase text-amber-700 mb-2 capitalize">{metal}</p>
@@ -314,24 +328,26 @@ export default function ReportsPage() {
                     <thead><tr className="bg-gray-50">
                       <th className="text-left p-2 font-medium">Customer</th>
                       <th className="text-left p-2 font-medium">Item</th>
+                      <th className="text-left p-2 font-medium">Purity</th>
+                      <th className="text-left p-2 font-medium">Party</th>
                       <th className="text-right p-2 font-medium">Weight</th>
                       <th className="text-right p-2 font-medium">Amount</th>
                       <th className="text-right p-2 font-medium">Old Gold</th>
                       <th className="text-right p-2 font-medium">Old Silver</th>
                     </tr></thead>
                     <tbody>
-                      {metalBills.flatMap((b: any) =>
-                        (b.sales_line_items ?? []).map((l: any, i: number) => (
-                          <tr key={`${b.id}-${i}`} className="border-t border-gray-100">
-                            <td className="p-2">{i === 0 ? b.customer_name : ''}</td>
-                            <td className="p-2">{l.item_name}</td>
-                            <td className="p-2 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
-                            <td className="p-2 text-right">{formatCurrency(l.amount)}</td>
-                            <td className="p-2 text-right">{i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—'}</td>
-                            <td className="p-2 text-right">{i === 0 && b.old_silver_weight ? `${b.old_silver_weight}g` : '—'}</td>
-                          </tr>
-                        ))
-                      )}
+                      {metalItems.map((item: any, i: number) => (
+                        <tr key={`${item.id}-${i}`} className="border-t border-gray-100">
+                          <td className="p-2">{item.customer_name}</td>
+                          <td className="p-2">{item.item_name}</td>
+                          <td className="p-2">{item.purity ?? '—'}</td>
+                          <td className="p-2">{item.party ?? '—'}</td>
+                          <td className="p-2 text-right">{item.weight ? `${item.weight}g` : '—'}</td>
+                          <td className="p-2 text-right">{formatCurrency(item.amount)}</td>
+                          <td className="p-2 text-right">{item.isFirstInBill && item.old_gold_weight ? `${item.old_gold_weight}g` : '—'}</td>
+                          <td className="p-2 text-right">{item.isFirstInBill && item.old_silver_weight ? `${item.old_silver_weight}g` : '—'}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

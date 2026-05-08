@@ -272,8 +272,7 @@ function SalesBillDetail({ data }: { data: any }) {
     <div className="space-y-3 text-sm">
       <InfoGrid items={[
         ['Customer', data.customer_name], ['Phone', data.customer_phone],
-        ['Metal', data.metal_type], ['Purity', data.purity ?? '—'],
-        ['Party', data.party], ['Total', formatCurrency(data.total_amount)],
+        ['Bill #', data.bill_number], ['Total', formatCurrency(data.total_amount)],
       ]} />
       {(data.old_gold_weight || data.old_silver_weight) && (
         <div className="bg-gray-50 rounded-lg p-3">
@@ -287,6 +286,9 @@ function SalesBillDetail({ data }: { data: any }) {
         <table className="w-full text-xs border-collapse">
           <thead><tr className="bg-gray-50">
             <th className="text-left p-1.5 font-medium">Item</th>
+            <th className="text-left p-1.5 font-medium">Metal</th>
+            <th className="text-left p-1.5 font-medium">Purity</th>
+            <th className="text-left p-1.5 font-medium">Party</th>
             <th className="text-right p-1.5 font-medium">Weight</th>
             <th className="text-right p-1.5 font-medium">Amount</th>
           </tr></thead>
@@ -294,6 +296,9 @@ function SalesBillDetail({ data }: { data: any }) {
             {(data.sales_line_items ?? []).map((l: any) => (
               <tr key={l.id} className="border-t border-gray-100">
                 <td className="p-1.5">{l.item_name}</td>
+                <td className="p-1.5 capitalize">{l.metal_type ?? '—'}</td>
+                <td className="p-1.5">{l.purity ?? '—'}</td>
+                <td className="p-1.5">{l.party ?? '—'}</td>
                 <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
                 <td className="p-1.5 text-right">{formatCurrency(l.amount)}</td>
               </tr>

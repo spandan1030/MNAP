@@ -64,6 +64,9 @@ export interface SalesLineItem {
   item_name: string
   weight: number | null
   amount: number
+  metal_type: MetalType
+  purity: string | null
+  party: string
 }
 
 export interface SalesPayment {

@@ -87,9 +87,6 @@ export default function ArchivalPage() {
                     <th className="p-2 font-medium">Bill #</th>
                     <th className="p-2 font-medium">Customer</th>
                     <th className="p-2 font-medium">Phone</th>
-                    <th className="p-2 font-medium">Metal</th>
-                    <th className="p-2 font-medium">Purity</th>
-                    <th className="p-2 font-medium">Party</th>
                     <th className="p-2 font-medium">Items</th>
                     <th className="p-2 font-medium text-right">Total</th>
                     <th className="p-2 font-medium">Old Metal</th>
@@ -104,12 +101,14 @@ export default function ArchivalPage() {
                         <td className="p-2 font-medium">{b.bill_number}</td>
                         <td className="p-2">{b.customer_name}</td>
                         <td className="p-2">{b.customer_phone}</td>
-                        <td className="p-2 capitalize">{b.metal_type}</td>
-                        <td className="p-2">{b.purity ?? '—'}</td>
-                        <td className="p-2">{b.party}</td>
                         <td className="p-2">
                           {(b.sales_line_items ?? []).map((l: any) => (
-                            <div key={l.id}>{l.item_name}{l.weight ? ` (${l.weight}g)` : ''} — {formatCurrency(l.amount)}</div>
+                            <div key={l.id} className="text-xs leading-5">
+                              <span className="font-medium">{l.item_name}</span>
+                              <span className="text-gray-500"> · {l.metal_type}{l.purity ? ` ${l.purity}` : ''} · {l.party ?? '—'}</span>
+                              {l.weight ? <span className="text-gray-500"> · {l.weight}g</span> : null}
+                              <span> — {formatCurrency(l.amount)}</span>
+                            </div>
                           ))}
                         </td>
                         <td className="p-2 text-right font-medium">{formatCurrency(b.total_amount)}</td>
