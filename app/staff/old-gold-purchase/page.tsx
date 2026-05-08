@@ -13,35 +13,13 @@ export default function OldGoldPurchasePage() {
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [metalType, setMetalType] = useState<'gold' | 'silver'>('gold')
-  const [purity, setPurity] = useState('22K')
+  const [purity, setPurity] = useState('')
   const [weight, setWeight] = useState('')
-  const [ratePerGram, setRatePerGram] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
   const [paymentMode, setPaymentMode] = useState('cash')
   const [notes, setNotes] = useState('')
 
   useEffect(() => { loadSession() }, [])
-
-  function handleWeightChange(val: string) {
-    setWeight(val)
-    const w = parseFloat(val)
-    const r = parseFloat(ratePerGram)
-    if (w > 0 && r > 0) setTotalAmount((w * r).toFixed(2))
-  }
-
-  function handleRateChange(val: string) {
-    setRatePerGram(val)
-    const w = parseFloat(weight)
-    const r = parseFloat(val)
-    if (w > 0 && r > 0) setTotalAmount((w * r).toFixed(2))
-  }
-
-  function handleTotalChange(val: string) {
-    setTotalAmount(val)
-    const w = parseFloat(weight)
-    const t = parseFloat(val)
-    if (w > 0 && t > 0) setRatePerGram((t / w).toFixed(2))
-  }
 
   async function loadSession() {
     const today = new Date().toISOString().split('T')[0]
@@ -53,18 +31,18 @@ export default function OldGoldPurchasePage() {
     e.preventDefault()
     setError('')
     if (!sessionId) { setError('No open day session. Ask admin to open the day first.'); return }
-    if (!weight || !totalAmount) { setError('Weight and Total Amount are required.'); return }
+    if (!totalAmount) { setError('Amount is required.'); return }
 
     setSubmitting(true)
     const { data: { user } } = await supabase.auth.getUser()
     const { error: err } = await supabase.from('old_gold_purchases').insert({
       day_session_id: sessionId,
-      customer_name: customerName,
+      customer_name: customerName || null,
       customer_phone: customerPhone || null,
       metal_type: metalType,
       purity: purity || null,
-      weight: parseFloat(weight),
-      rate_per_gram: parseFloat(ratePerGram) || null,
+      weight: parseFloat(weight) || null,
+      rate_per_gram: null,
       total_amount: parseFloat(totalAmount),
       payment_mode: paymentMode,
       notes: notes || null,
@@ -77,8 +55,8 @@ export default function OldGoldPurchasePage() {
   }
 
   function resetForm() {
-    setCustomerName(''); setCustomerPhone(''); setMetalType('gold'); setPurity('22K')
-    setWeight(''); setRatePerGram(''); setTotalAmount(''); setPaymentMode('cash'); setNotes('')
+    setCustomerName(''); setCustomerPhone(''); setMetalType('gold'); setPurity('')
+    setWeight(''); setTotalAmount(''); setPaymentMode('cash'); setNotes('')
     setTimeout(() => setSuccess(false), 4000)
   }
 
@@ -86,7 +64,7 @@ export default function OldGoldPurchasePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Old Gold Purchase — Module E</h1>
-        <p className="text-sm text-gray-500 mt-1">Record gold/silver purchased from customer. Amount paid to customer is tracked as cash outflow.</p>
+        <p className="text-sm text-gray-500 mt-1">Record gold/silver purchased from customer. Cash payments are tracked as cash outflow; bank transfer has no cash register impact.</p>
       </div>
 
       {success && (
@@ -97,10 +75,10 @@ export default function OldGoldPurchasePage() {
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Customer Name *" value={customerName} onChange={setCustomerName} required />
+          <Field label="Customer Name" value={customerName} onChange={setCustomerName} />
           <Field label="Customer Phone" value={customerPhone} onChange={setCustomerPhone} type="tel" />
           <div>
-            <label className="label">Metal Type *</label>
+            <label className="label">Metal Type</label>
             <select value={metalType} onChange={e => setMetalType(e.target.value as 'gold' | 'silver')} className="input">
               <option value="gold">Gold</option>
               <option value="silver">Silver</option>
@@ -110,13 +88,12 @@ export default function OldGoldPurchasePage() {
             <label className="label">Expected Purity</label>
             <input value={purity} onChange={e => setPurity(e.target.value)} className="input" placeholder="e.g. 22K, 18K, 916…" />
           </div>
-          <Field label="Weight (g) *" value={weight} onChange={handleWeightChange} type="number" required />
-          <Field label="Rate per Gram (₹)" value={ratePerGram} onChange={handleRateChange} type="number" />
+          <Field label="Weight (g)" value={weight} onChange={setWeight} type="number" />
           <div>
             <label className="label">Total Amount Paid (₹) *</label>
             <input type="number" step="0.01" min="0" value={totalAmount}
-              onChange={e => handleTotalChange(e.target.value)}
-              className="input" required placeholder="Auto-fills from weight × rate" />
+              onChange={e => setTotalAmount(e.target.value)}
+              className="input" required />
           </div>
           <div>
             <label className="label">Payment Mode *</label>
