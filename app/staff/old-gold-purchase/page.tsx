@@ -22,11 +22,26 @@ export default function OldGoldPurchasePage() {
 
   useEffect(() => { loadSession() }, [])
 
-  useEffect(() => {
-    const w = parseFloat(weight)
+  function handleWeightChange(val: string) {
+    setWeight(val)
+    const w = parseFloat(val)
     const r = parseFloat(ratePerGram)
     if (w > 0 && r > 0) setTotalAmount((w * r).toFixed(2))
-  }, [weight, ratePerGram])
+  }
+
+  function handleRateChange(val: string) {
+    setRatePerGram(val)
+    const w = parseFloat(weight)
+    const r = parseFloat(val)
+    if (w > 0 && r > 0) setTotalAmount((w * r).toFixed(2))
+  }
+
+  function handleTotalChange(val: string) {
+    setTotalAmount(val)
+    const w = parseFloat(weight)
+    const t = parseFloat(val)
+    if (w > 0 && t > 0) setRatePerGram((t / w).toFixed(2))
+  }
 
   async function loadSession() {
     const today = new Date().toISOString().split('T')[0]
@@ -95,12 +110,12 @@ export default function OldGoldPurchasePage() {
             <label className="label">Expected Purity</label>
             <input value={purity} onChange={e => setPurity(e.target.value)} className="input" placeholder="e.g. 22K, 18K, 916…" />
           </div>
-          <Field label="Weight (g) *" value={weight} onChange={setWeight} type="number" required />
-          <Field label="Rate per Gram (₹)" value={ratePerGram} onChange={setRatePerGram} type="number" />
+          <Field label="Weight (g) *" value={weight} onChange={handleWeightChange} type="number" required />
+          <Field label="Rate per Gram (₹)" value={ratePerGram} onChange={handleRateChange} type="number" />
           <div>
             <label className="label">Total Amount Paid (₹) *</label>
             <input type="number" step="0.01" min="0" value={totalAmount}
-              onChange={e => setTotalAmount(e.target.value)}
+              onChange={e => handleTotalChange(e.target.value)}
               className="input" required placeholder="Auto-fills from weight × rate" />
           </div>
           <div>
