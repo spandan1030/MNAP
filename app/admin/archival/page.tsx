@@ -82,32 +82,36 @@ export default function ArchivalPage() {
           <Section title={`Sales Bills (Module A) — ${filtered(data.bills).length} entries`}>
             {filtered(data.bills).length === 0 ? <Empty /> : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse min-w-[900px]">
+                <table className="w-full text-xs border-collapse min-w-[1100px]">
                   <thead><tr className="bg-gray-50 text-left">
-                    <th className="p-2 font-medium">Bill #</th>
-                    <th className="p-2 font-medium">Customer</th>
-                    <th className="p-2 font-medium">Phone</th>
-                    <th className="p-2 font-medium">Items</th>
-                    <th className="p-2 font-medium text-right">Total</th>
-                    <th className="p-2 font-medium">Old Metal</th>
-                    <th className="p-2 font-medium">Payments</th>
-                    <th className="p-2 font-medium">Status</th>
-                    <th className="p-2 font-medium">Time</th>
-                    <th className="p-2 font-medium">By</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Bill #</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Customer</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Phone</th>
+                    <th className="p-2 font-medium" style={{ minWidth: '260px' }}>Items</th>
+                    <th className="p-2 font-medium text-right whitespace-nowrap">Total</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Old Metal</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Payments</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Status</th>
+                    <th className="p-2 font-medium whitespace-nowrap">Time</th>
+                    <th className="p-2 font-medium whitespace-nowrap">By</th>
                   </tr></thead>
                   <tbody>
                     {filtered(data.bills).map((b: any) => (
                       <tr key={b.id} className="border-t border-gray-100 align-top">
-                        <td className="p-2 font-medium">{b.bill_number}</td>
-                        <td className="p-2">{b.customer_name}</td>
-                        <td className="p-2">{b.customer_phone}</td>
-                        <td className="p-2">
-                          {(b.sales_line_items ?? []).map((l: any) => (
-                            <div key={l.id} className="text-xs leading-5">
+                        <td className="p-2 font-medium whitespace-nowrap">{b.bill_number}</td>
+                        <td className="p-2 whitespace-nowrap">{b.customer_name}</td>
+                        <td className="p-2 whitespace-nowrap">{b.customer_phone}</td>
+                        <td className="p-2" style={{ minWidth: '260px' }}>
+                          {(b.sales_line_items ?? []).map((l: any, idx: number) => (
+                            <div key={l.id} className={`py-1 ${idx > 0 ? 'border-t border-gray-100 mt-1' : ''}`}>
                               <span className="font-medium">{l.item_name}</span>
-                              <span className="text-gray-500"> · {l.metal_type}{l.purity ? ` ${l.purity}` : ''} · {l.party ?? '—'}</span>
+                              <span className="text-gray-400"> · </span>
+                              <span className="text-gray-600 capitalize">{l.metal_type}</span>
+                              {l.purity && <span className="text-gray-500"> {l.purity}</span>}
+                              <span className="text-gray-400"> · </span>
+                              <span className="text-gray-600">{l.party ?? '—'}</span>
                               {l.weight ? <span className="text-gray-500"> · {l.weight}g</span> : null}
-                              <span> — {formatCurrency(l.amount)}</span>
+                              <span className="font-medium"> — {formatCurrency(l.amount)}</span>
                             </div>
                           ))}
                         </td>
