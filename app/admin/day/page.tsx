@@ -29,26 +29,30 @@ export default function DayRegisterPage() {
     setSession(data)
 
     if (data) {
-      // Calculate expected cash
       const opening = (data.register_a_opening ?? 0) + (data.register_b_opening ?? 0)
-      const [sp, mr, ex] = await Promise.all([
+      const [sp, mr, ex, ogp, dr] = await Promise.all([
         supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
           .eq('sales_bills.day_session_id', data.id).neq('sales_bills.status', 'rejected'),
         supabase.from('money_receipts').select('amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('expenses').select('amount, payment_type').eq('day_session_id', data.id).neq('status', 'rejected'),
+        supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
+        supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
       ])
-      const cashIn = (sp.data ?? []).filter((p: { payment_mode: string }) => p.payment_mode === 'cash').reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-      const rCash = (mr.data ?? []).filter((r: { payment_mode: string }) => r.payment_mode === 'cash').reduce((s: number, r: { amount: number }) => s + r.amount, 0)
-      const cashOut = (ex.data ?? []).filter((e: { payment_type: string }) => e.payment_type === 'cash').reduce((s: number, e: { amount: number }) => s + e.amount, 0)
-      setExpectedCash(opening + cashIn + rCash - cashOut)
+      const cashIn = (sp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
+      const rCash = (mr.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
+      const cashOut = (ex.data ?? []).filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
+      const cashOgpOut = (ogp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
+      const cashDrIn = (dr.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
+      setExpectedCash(opening + cashIn + rCash + cashDrIn - cashOut - cashOgpOut)
 
-      // Check pending entries
-      const [b, r, e] = await Promise.all([
+      const [b, r, e, og, drp] = await Promise.all([
         supabase.from('sales_bills').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
         supabase.from('money_receipts').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
         supabase.from('expenses').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
+        supabase.from('old_gold_purchases').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
+        supabase.from('direct_receipts').select('id', { count: 'exact' }).eq('day_session_id', data.id).eq('status', 'pending'),
       ])
-      setPendingCount((b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0))
+      setPendingCount((b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (drp.count ?? 0))
     }
     setLoading(false)
   }
@@ -66,7 +70,7 @@ export default function DayRegisterPage() {
       status: 'open',
     })
     if (error) { setMessage('Error: ' + error.message) }
-    else { setMessage('Day opened successfully.') ; await fetchSession() }
+    else { setMessage('Day opened successfully.'); await fetchSession() }
     setSubmitting(false)
   }
 
@@ -87,7 +91,7 @@ export default function DayRegisterPage() {
       closed_at: new Date().toISOString(),
     }).eq('id', session!.id)
     if (error) { setMessage('Error: ' + error.message) }
-    else { setMessage('Day closed successfully.') ; await fetchSession() }
+    else { setMessage('Day closed successfully.'); await fetchSession() }
     setSubmitting(false)
   }
 
@@ -141,14 +145,12 @@ export default function DayRegisterPage() {
                 <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
                   <Row label="Total Closing (A+B)" value={formatCurrency(closingTotal)} />
                   <Row label="Expected Cash In Hand" value={formatCurrency(expectedCash)} />
-                  <Row
-                    label="Variance"
-                    value={formatCurrency(variance)}
-                    className={variance !== 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}
-                  />
+                  <Row label="Variance" value={formatCurrency(variance)}
+                    className={variance !== 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'} />
                 </div>
               )}
-              <button type="submit" disabled={submitting || pendingCount > 0} className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-semibold py-2 rounded-lg text-sm">
+              <button type="submit" disabled={submitting || pendingCount > 0}
+                className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white font-semibold py-2 rounded-lg text-sm">
                 {submitting ? 'Closing…' : 'Close Day'}
               </button>
             </form>
@@ -184,10 +186,8 @@ function Field({ label, value, onChange }: { label: string; value: string; onCha
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        type="number" min="0" step="0.01" value={value} onChange={e => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-      />
+      <input type="number" min="0" step="0.01" value={value} onChange={e => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
     </div>
   )
 }

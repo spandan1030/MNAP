@@ -6,50 +6,43 @@ export default async function AdminDashboard() {
   const supabase = await createClient()
   const today = new Date().toISOString().split('T')[0]
 
-  const { data: session } = await supabase
-    .from('day_sessions')
-    .select('*')
-    .eq('date', today)
-    .single()
+  const { data: session } = await supabase.from('day_sessions').select('*').eq('date', today).single()
 
   let liveCash = 0
   let pendingCount = 0
   let todaySales = 0
-  let todayReceipts = 0
   let todayExpenses = 0
 
   if (session) {
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
 
-    const [salesRes, receiptsRes, expensesRes] = await Promise.all([
+    const [salesRes, receiptsRes, expensesRes, ogpRes, drRes] = await Promise.all([
       supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
-        .eq('sales_bills.day_session_id', session.id)
-        .neq('sales_bills.status', 'rejected'),
+        .eq('sales_bills.day_session_id', session.id).neq('sales_bills.status', 'rejected'),
       supabase.from('money_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('expenses').select('amount, payment_type').eq('day_session_id', session.id).neq('status', 'rejected'),
+      supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
+      supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
     ])
 
-    const cashIn = (salesRes.data ?? [])
-      .filter((p: { payment_mode: string }) => p.payment_mode === 'cash')
-      .reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-    const receiptCashIn = (receiptsRes.data ?? [])
-      .filter((r: { payment_mode: string }) => r.payment_mode === 'cash')
-      .reduce((s: number, r: { amount: number }) => s + r.amount, 0)
-    const cashOut = (expensesRes.data ?? [])
-      .filter((e: { payment_type: string }) => e.payment_type === 'cash')
-      .reduce((s: number, e: { amount: number }) => s + e.amount, 0)
+    const cashIn = (salesRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
+    const receiptCashIn = (receiptsRes.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
+    const cashOut = (expensesRes.data ?? []).filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
+    const cashOgpOut = (ogpRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
+    const cashDrIn = (drRes.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
 
-    liveCash = opening + cashIn + receiptCashIn - cashOut
-    todaySales = (salesRes.data ?? []).reduce((s: number, p: { amount: number }) => s + p.amount, 0)
-    todayReceipts = (receiptsRes.data ?? []).reduce((s: number, r: { amount: number }) => s + r.amount, 0)
-    todayExpenses = (expensesRes.data ?? []).reduce((s: number, e: { amount: number }) => s + e.amount, 0)
+    liveCash = opening + cashIn + receiptCashIn + cashDrIn - cashOut - cashOgpOut
+    todaySales = (salesRes.data ?? []).reduce((s: number, p: any) => s + p.amount, 0)
+    todayExpenses = (expensesRes.data ?? []).reduce((s: number, e: any) => s + e.amount, 0)
 
-    const [b, r, e] = await Promise.all([
+    const [b, r, e, og, dr] = await Promise.all([
       supabase.from('sales_bills').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
       supabase.from('money_receipts').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
       supabase.from('expenses').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
+      supabase.from('old_gold_purchases').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
+      supabase.from('direct_receipts').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
     ])
-    pendingCount = (b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0)
+    pendingCount = (b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (dr.count ?? 0)
   }
 
   return (
@@ -74,7 +67,7 @@ export default async function AdminDashboard() {
 
       {!session && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
-          No day session open today. Go to <Link href="/admin/day" className="font-semibold underline">Day Register</Link> to open the day before staff can submit entries.
+          No day session open today. Go to <Link href="/admin/day" className="font-semibold underline">Day Register</Link> to open the day.
         </div>
       )}
 
@@ -90,6 +83,7 @@ export default async function AdminDashboard() {
         <QuickLink href="/admin/reports" title="End-of-Day Report" desc="Generate and export PDF report" color="green" />
         <QuickLink href="/admin/day" title="Day Register" desc="Open or close today's session" color="blue" />
         <QuickLink href="/admin/items" title="Item Master" desc="Manage jewellery item list" color="purple" />
+        <QuickLink href="/admin/archival" title="Archival" desc="View all entries across all modules" color="gray" />
       </div>
     </div>
   )
@@ -110,6 +104,7 @@ function QuickLink({ href, title, desc, color }: { href: string; title: string; 
     green: 'hover:bg-green-50 border-green-100',
     blue: 'hover:bg-blue-50 border-blue-100',
     purple: 'hover:bg-purple-50 border-purple-100',
+    gray: 'hover:bg-gray-50 border-gray-200',
   }
   return (
     <Link href={href} className={`block bg-white rounded-xl border p-4 transition-colors ${colors[color]}`}>

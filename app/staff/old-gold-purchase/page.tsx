@@ -1,0 +1,148 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { PURITY_OPTIONS } from '@/lib/utils'
+
+export default function OldGoldPurchasePage() {
+  const supabase = createClient()
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState('')
+
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [metalType, setMetalType] = useState<'gold' | 'silver'>('gold')
+  const [purity, setPurity] = useState('22K')
+  const [weight, setWeight] = useState('')
+  const [ratePerGram, setRatePerGram] = useState('')
+  const [totalAmount, setTotalAmount] = useState('')
+  const [paymentMode, setPaymentMode] = useState('cash')
+  const [notes, setNotes] = useState('')
+
+  useEffect(() => { loadSession() }, [])
+
+  useEffect(() => {
+    const purities = PURITY_OPTIONS[metalType]
+    if (purities.length > 0) setPurity(purities[0])
+  }, [metalType])
+
+  useEffect(() => {
+    const w = parseFloat(weight)
+    const r = parseFloat(ratePerGram)
+    if (w > 0 && r > 0) setTotalAmount((w * r).toFixed(2))
+  }, [weight, ratePerGram])
+
+  async function loadSession() {
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase.from('day_sessions').select('id, status').eq('date', today).eq('status', 'open').single()
+    setSessionId(data?.id ?? null)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    if (!sessionId) { setError('No open day session. Ask admin to open the day first.'); return }
+    if (!weight || !totalAmount) { setError('Weight and Total Amount are required.'); return }
+
+    setSubmitting(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: err } = await supabase.from('old_gold_purchases').insert({
+      day_session_id: sessionId,
+      customer_name: customerName,
+      customer_phone: customerPhone || null,
+      metal_type: metalType,
+      purity: purity || null,
+      weight: parseFloat(weight),
+      rate_per_gram: parseFloat(ratePerGram) || null,
+      total_amount: parseFloat(totalAmount),
+      payment_mode: paymentMode,
+      notes: notes || null,
+      submitted_by: user!.id,
+    })
+    if (err) { setError(err.message); setSubmitting(false); return }
+    setSuccess(true)
+    setSubmitting(false)
+    resetForm()
+  }
+
+  function resetForm() {
+    setCustomerName(''); setCustomerPhone(''); setMetalType('gold'); setPurity('22K')
+    setWeight(''); setRatePerGram(''); setTotalAmount(''); setPaymentMode('cash'); setNotes('')
+    setTimeout(() => setSuccess(false), 4000)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Old Gold Purchase — Module E</h1>
+        <p className="text-sm text-gray-500 mt-1">Record gold/silver purchased from customer. Amount paid to customer is tracked as cash outflow.</p>
+      </div>
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
+          ✓ Entry submitted successfully and is pending admin review.
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Customer Name *" value={customerName} onChange={setCustomerName} required />
+          <Field label="Customer Phone" value={customerPhone} onChange={setCustomerPhone} type="tel" />
+          <div>
+            <label className="label">Metal Type *</label>
+            <select value={metalType} onChange={e => setMetalType(e.target.value as 'gold' | 'silver')} className="input">
+              <option value="gold">Gold</option>
+              <option value="silver">Silver</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Purity</label>
+            <select value={purity} onChange={e => setPurity(e.target.value)} className="input">
+              {PURITY_OPTIONS[metalType].map(p => <option key={p}>{p}</option>)}
+            </select>
+          </div>
+          <Field label="Weight (g) *" value={weight} onChange={setWeight} type="number" required />
+          <Field label="Rate per Gram (₹)" value={ratePerGram} onChange={setRatePerGram} type="number" />
+          <div>
+            <label className="label">Total Amount Paid (₹) *</label>
+            <input type="number" step="0.01" min="0" value={totalAmount}
+              onChange={e => setTotalAmount(e.target.value)}
+              className="input" required placeholder="Auto-fills from weight × rate" />
+          </div>
+          <div>
+            <label className="label">Payment Mode *</label>
+            <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="input">
+              <option value="cash">Cash</option>
+              <option value="bank_transfer">Bank Transfer</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="label">Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input" rows={2} />
+        </div>
+
+        {error && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm">{error}</div>}
+
+        <button type="submit" disabled={submitting}
+          className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-3 rounded-xl text-sm transition-colors">
+          {submitting ? 'Submitting…' : 'Submit Purchase Entry'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, required, type = 'text' }: {
+  label: string; value: string; onChange: (v: string) => void; required?: boolean; type?: string
+}) {
+  return (
+    <div>
+      <label className="label">{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} required={required}
+        className="input" step={type === 'number' ? '0.001' : undefined} min={type === 'number' ? '0' : undefined} />
+    </div>
+  )
+}

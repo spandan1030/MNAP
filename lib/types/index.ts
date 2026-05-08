@@ -1,7 +1,7 @@
 export type UserRole = 'admin' | 'staff'
 export type MetalType = 'gold' | 'silver' | 'other'
 export type EntryStatus = 'pending' | 'approved' | 'rejected' | 'edited'
-export type PaymentMode = 'cash' | 'card' | 'upi' | 'cheque' | 'customer_credit' | 'advance_adjustment' | 'sip_adjustment'
+export type PaymentMode = 'cash' | 'card' | 'upi' | 'phonepe' | 'cheque' | 'customer_credit' | 'advance_adjustment' | 'sip_adjustment'
 export type ReceiptType = 'advance' | 'sip' | 'customer_credit' | 'repair'
 export type ExpensePaymentType = 'cash' | 'bank_transfer'
 export type DayStatus = 'open' | 'closed'
@@ -101,6 +101,42 @@ export interface Expense {
   description: string
   amount: number
   payment_type: ExpensePaymentType
+  notes: string | null
+  status: EntryStatus
+  submitted_by: string
+  submitted_at: string
+  rejection_reason: string | null
+  created_at: string
+  submitter?: Profile
+}
+
+export interface OldGoldPurchase {
+  id: string
+  day_session_id: string
+  customer_name: string
+  customer_phone: string | null
+  metal_type: 'gold' | 'silver'
+  purity: string | null
+  weight: number
+  rate_per_gram: number | null
+  total_amount: number
+  payment_mode: 'cash' | 'bank_transfer'
+  notes: string | null
+  status: EntryStatus
+  submitted_by: string
+  submitted_at: string
+  rejection_reason: string | null
+  created_at: string
+  submitter?: Profile
+}
+
+export interface DirectReceipt {
+  id: string
+  day_session_id: string
+  customer_name: string
+  customer_number: string | null
+  amount: number
+  payment_mode: string
   notes: string | null
   status: EntryStatus
   submitted_by: string

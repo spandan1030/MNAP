@@ -55,7 +55,10 @@ export default function SalesPage() {
 
   const totalBillAmount = lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
   const totalPayments = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
-  const paymentMismatch = Math.abs(totalBillAmount - totalPayments) > 0.01
+  const oldGoldAmt = parseFloat(oldGoldAmount) || 0
+  const oldSilverAmt = parseFloat(oldSilverAmount) || 0
+  const amountDueFromPayments = totalBillAmount - oldGoldAmt - oldSilverAmt
+  const paymentMismatch = Math.abs(amountDueFromPayments - totalPayments) > 0.01
 
   function updateLine(i: number, field: keyof LineItem, val: string) {
     setLineItems(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: val } : l))
@@ -278,16 +281,23 @@ export default function SalesPage() {
             className="mt-3 text-sm text-amber-600 hover:text-amber-800 font-medium">
             + Add Payment Mode
           </button>
-          <div className="mt-3 flex justify-between text-sm">
-            <span className="text-gray-500">Payment Total: ₹{totalPayments.toFixed(2)}</span>
-            {paymentMismatch && (
-              <span className="text-red-600 font-semibold">
-                ✗ Mismatch: ₹{Math.abs(totalBillAmount - totalPayments).toFixed(2)} {totalPayments > totalBillAmount ? 'over' : 'short'}
-              </span>
+          <div className="mt-3 space-y-1">
+            {(oldGoldAmt > 0 || oldSilverAmt > 0) && (
+              <p className="text-xs text-gray-400">
+                Bill ₹{totalBillAmount.toFixed(2)} − Old Metal ₹{(oldGoldAmt + oldSilverAmt).toFixed(2)} = Due from payment modes: ₹{amountDueFromPayments.toFixed(2)}
+              </p>
             )}
-            {!paymentMismatch && totalBillAmount > 0 && (
-              <span className="text-green-600 font-semibold">✓ Amounts match</span>
-            )}
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Payment Total: ₹{totalPayments.toFixed(2)}</span>
+              {paymentMismatch && (
+                <span className="text-red-600 font-semibold">
+                  ✗ Mismatch: ₹{Math.abs(amountDueFromPayments - totalPayments).toFixed(2)} {totalPayments > amountDueFromPayments ? 'over' : 'short'}
+                </span>
+              )}
+              {!paymentMismatch && totalBillAmount > 0 && (
+                <span className="text-green-600 font-semibold">✓ Amounts match</span>
+              )}
+            </div>
           </div>
         </Section>
 

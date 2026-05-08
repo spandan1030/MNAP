@@ -6,9 +6,25 @@ import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
 type FilterStatus = 'pending' | 'approved' | 'rejected' | 'edited' | 'all'
-type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses'
+type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses' | 'old_gold' | 'direct'
 
 interface AuditEntry { field_name: string; original_value: string; edited_value: string; edit_reason: string; edited_at: string }
+
+function getTableName(type: string): string {
+  const map: Record<string, string> = {
+    sales: 'sales_bills', receipt: 'money_receipts', expense: 'expenses',
+    old_gold: 'old_gold_purchases', direct: 'direct_receipts',
+  }
+  return map[type] ?? 'expenses'
+}
+
+function getEntryLabel(type: string, data: any): string {
+  if (type === 'sales') return `Sale — Bill #${data.bill_number}`
+  if (type === 'receipt') return `Receipt — ${data.receipt_type.replace('_', ' ')}`
+  if (type === 'expense') return `Expense — ${data.description}`
+  if (type === 'old_gold') return `Old Gold Purchase — ${data.customer_name}`
+  return `Direct Receipt — ${data.customer_name}`
+}
 
 export default function QCPage() {
   const supabase = createClient()
@@ -17,6 +33,8 @@ export default function QCPage() {
   const [bills, setBills] = useState<any[]>([])
   const [receipts, setReceipts] = useState<any[]>([])
   const [expenses, setExpenses] = useState<any[]>([])
+  const [oldGoldPurchases, setOldGoldPurchases] = useState<any[]>([])
+  const [directReceipts, setDirectReceipts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<{ type: string; data: any } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
@@ -32,34 +50,37 @@ export default function QCPage() {
     if (!session) { setLoading(false); return }
 
     const statusFilter = filterStatus !== 'all' ? filterStatus : undefined
+    const applyFilter = (res: any) =>
+      statusFilter ? { data: (res.data ?? []).filter((x: any) => x.status === statusFilter) } : res
 
-    const [b, r, e] = await Promise.all([
+    const [b, r, e, og, dr] = await Promise.all([
       filterModule === 'all' || filterModule === 'sales'
-        ? supabase.from('sales_bills')
-            .select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)')
-            .eq('day_session_id', session.id)
-            .order('submitted_at', { ascending: false })
-            .then(res => statusFilter ? { data: (res.data ?? []).filter((x: any) => x.status === statusFilter) } : res)
+        ? supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)')
+            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
       filterModule === 'all' || filterModule === 'receipts'
-        ? supabase.from('money_receipts')
-            .select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id)
-            .order('submitted_at', { ascending: false })
-            .then(res => statusFilter ? { data: (res.data ?? []).filter((x: any) => x.status === statusFilter) } : res)
+        ? supabase.from('money_receipts').select('*, profiles!submitted_by(name)')
+            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
       filterModule === 'all' || filterModule === 'expenses'
-        ? supabase.from('expenses')
-            .select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id)
-            .order('submitted_at', { ascending: false })
-            .then(res => statusFilter ? { data: (res.data ?? []).filter((x: any) => x.status === statusFilter) } : res)
+        ? supabase.from('expenses').select('*, profiles!submitted_by(name)')
+            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'old_gold'
+        ? supabase.from('old_gold_purchases').select('*, profiles!submitted_by(name)')
+            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'direct'
+        ? supabase.from('direct_receipts').select('*, profiles!submitted_by(name)')
+            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
     ])
 
     setBills(b.data ?? [])
     setReceipts(r.data ?? [])
     setExpenses(e.data ?? [])
+    setOldGoldPurchases(og.data ?? [])
+    setDirectReceipts(dr.data ?? [])
     setLoading(false)
   }, [filterStatus, filterModule])
 
@@ -72,8 +93,7 @@ export default function QCPage() {
 
   async function handleApprove(type: string, id: string) {
     setActionLoading(true)
-    const table = type === 'sales' ? 'sales_bills' : type === 'receipt' ? 'money_receipts' : 'expenses'
-    await supabase.from(table).update({ status: 'approved' }).eq('id', id)
+    await supabase.from(getTableName(type)).update({ status: 'approved' }).eq('id', id)
     setMessage('Entry approved.')
     setSelected(null)
     await fetchEntries()
@@ -83,8 +103,7 @@ export default function QCPage() {
   async function handleReject(type: string, id: string) {
     if (!rejectReason.trim()) { setMessage('Please enter a rejection reason.'); return }
     setActionLoading(true)
-    const table = type === 'sales' ? 'sales_bills' : type === 'receipt' ? 'money_receipts' : 'expenses'
-    await supabase.from(table).update({ status: 'rejected', rejection_reason: rejectReason }).eq('id', id)
+    await supabase.from(getTableName(type)).update({ status: 'rejected', rejection_reason: rejectReason }).eq('id', id)
     setMessage('Entry rejected.')
     setRejectReason('')
     setSelected(null)
@@ -95,10 +114,9 @@ export default function QCPage() {
   async function handleEdit(type: string, id: string, field: string, oldVal: string, newVal: string) {
     if (oldVal === newVal) return
     const { data: { user } } = await supabase.auth.getUser()
-    const table = type === 'sales' ? 'sales_bills' : type === 'receipt' ? 'money_receipts' : 'expenses'
-    await supabase.from(table).update({ [field]: newVal, status: 'edited' }).eq('id', id)
+    await supabase.from(getTableName(type)).update({ [field]: newVal, status: 'edited' }).eq('id', id)
     await supabase.from('audit_log').insert({
-      table_name: table,
+      table_name: getTableName(type),
       record_id: id,
       field_name: field,
       original_value: oldVal,
@@ -114,18 +132,20 @@ export default function QCPage() {
     ...bills.map(b => ({ type: 'sales', data: b })),
     ...receipts.map(r => ({ type: 'receipt', data: r })),
     ...expenses.map(e => ({ type: 'expense', data: e })),
+    ...oldGoldPurchases.map(o => ({ type: 'old_gold', data: o })),
+    ...directReceipts.map(d => ({ type: 'direct', data: d })),
   ].sort((a, b) => new Date(b.data.submitted_at).getTime() - new Date(a.data.submitted_at).getTime())
 
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-bold text-gray-900">QC Review Panel</h1>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 bg-white rounded-xl border border-gray-200 p-4">
         <FilterGroup label="Status" value={filterStatus} onChange={v => setFilterStatus(v as FilterStatus)}
           options={['pending', 'approved', 'rejected', 'edited', 'all']} />
         <FilterGroup label="Module" value={filterModule} onChange={v => setFilterModule(v as FilterModule)}
-          options={['all', 'sales', 'receipts', 'expenses']} />
+          options={['all', 'sales', 'receipts', 'expenses', 'old_gold', 'direct']}
+          labels={{ old_gold: 'old gold', direct: 'direct' }} />
       </div>
 
       {message && (
@@ -141,19 +161,18 @@ export default function QCPage() {
       ) : (
         <div className="space-y-2">
           {allEntries.map(({ type, data }) => (
-            <EntryRow key={data.id} type={type} data={data} onOpen={() => { setSelected({ type, data }); setRejectReason(''); setMessage(''); loadAuditLog(data.id) }} />
+            <EntryRow key={data.id} type={type} data={data}
+              onOpen={() => { setSelected({ type, data }); setRejectReason(''); setMessage(''); loadAuditLog(data.id) }} />
           ))}
         </div>
       )}
 
-      {/* Detail Modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) setSelected(null) }}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={e => { if (e.target === e.currentTarget) setSelected(null) }}>
           <div className="bg-white rounded-2xl w-full max-w-2xl my-8 shadow-2xl">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">
-                {selected.type === 'sales' ? `Bill #${selected.data.bill_number}` : selected.type === 'receipt' ? `Receipt — ${selected.data.receipt_type}` : `Expense — ${selected.data.description}`}
-              </h2>
+              <h2 className="font-semibold text-gray-900">{getEntryLabel(selected.type, selected.data)}</h2>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
             </div>
 
@@ -173,8 +192,9 @@ export default function QCPage() {
               {selected.type === 'sales' && <SalesBillDetail data={selected.data} />}
               {selected.type === 'receipt' && <ReceiptDetail data={selected.data} />}
               {selected.type === 'expense' && <ExpenseDetail data={selected.data} />}
+              {selected.type === 'old_gold' && <OldGoldDetail data={selected.data} />}
+              {selected.type === 'direct' && <DirectReceiptDetail data={selected.data} />}
 
-              {/* Audit Log */}
               {auditLog.length > 0 && (
                 <div className="border-t border-gray-100 pt-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Audit Trail</p>
@@ -190,15 +210,12 @@ export default function QCPage() {
                 </div>
               )}
 
-              {/* Actions */}
               <div className="border-t border-gray-100 pt-4 space-y-3">
                 {selected.data.status !== 'approved' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleApprove(selected.type, selected.data.id)} disabled={actionLoading}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg">
-                      ✓ Approve
-                    </button>
-                  </div>
+                  <button onClick={() => handleApprove(selected.type, selected.data.id)} disabled={actionLoading}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg">
+                    ✓ Approve
+                  </button>
                 )}
                 <div className="space-y-2">
                   <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
@@ -217,15 +234,17 @@ export default function QCPage() {
   )
 }
 
-function FilterGroup({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+function FilterGroup({ label, value, onChange, options, labels = {} }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-gray-500 font-medium">{label}:</span>
-      <div className="flex gap-1">
+      <div className="flex gap-1 flex-wrap">
         {options.map(o => (
           <button key={o} onClick={() => onChange(o)}
             className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize transition-colors ${value === o ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {o}
+            {labels[o] ?? o}
           </button>
         ))}
       </div>
@@ -234,15 +253,14 @@ function FilterGroup({ label, value, onChange, options }: { label: string; value
 }
 
 function EntryRow({ type, data, onOpen }: { type: string; data: any; onOpen: () => void }) {
-  const label = type === 'sales' ? `Sale — Bill #${data.bill_number}` : type === 'receipt' ? `Receipt — ${data.receipt_type}` : `Expense — ${data.description}`
   return (
     <div onClick={onOpen} className="bg-white rounded-xl border border-gray-200 hover:border-amber-300 p-4 cursor-pointer transition-colors flex items-center justify-between">
       <div>
-        <p className="font-medium text-gray-900 text-sm">{label}</p>
+        <p className="font-medium text-gray-900 text-sm">{getEntryLabel(type, data)}</p>
         <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(data.submitted_at)} · {data.profiles?.name ?? 'Staff'}</p>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-gray-700">₹{data.total_amount ?? data.amount}</span>
+        <span className="text-sm font-semibold text-gray-700">{formatCurrency(data.total_amount ?? data.amount)}</span>
         <StatusBadge status={data.status} />
       </div>
     </div>
@@ -259,7 +277,7 @@ function SalesBillDetail({ data }: { data: any }) {
       ]} />
       {(data.old_gold_weight || data.old_silver_weight) && (
         <div className="bg-gray-50 rounded-lg p-3">
-          <p className="text-xs font-semibold text-gray-500 mb-1">Old Metal</p>
+          <p className="text-xs font-semibold text-gray-500 mb-1">Old Metal Exchange</p>
           {data.old_gold_weight && <p>Gold: {data.old_gold_weight}g — {formatCurrency(data.old_gold_amount)}</p>}
           {data.old_silver_weight && <p>Silver: {data.old_silver_weight}g — {formatCurrency(data.old_silver_amount)}</p>}
         </div>
@@ -267,7 +285,11 @@ function SalesBillDetail({ data }: { data: any }) {
       <div>
         <p className="text-xs font-semibold text-gray-500 mb-1">Line Items</p>
         <table className="w-full text-xs border-collapse">
-          <thead><tr className="bg-gray-50"><th className="text-left p-1.5 font-medium">Item</th><th className="text-right p-1.5 font-medium">Weight</th><th className="text-right p-1.5 font-medium">Amount</th></tr></thead>
+          <thead><tr className="bg-gray-50">
+            <th className="text-left p-1.5 font-medium">Item</th>
+            <th className="text-right p-1.5 font-medium">Weight</th>
+            <th className="text-right p-1.5 font-medium">Amount</th>
+          </tr></thead>
           <tbody>
             {(data.sales_line_items ?? []).map((l: any) => (
               <tr key={l.id} className="border-t border-gray-100">
@@ -283,7 +305,7 @@ function SalesBillDetail({ data }: { data: any }) {
         <p className="text-xs font-semibold text-gray-500 mb-1">Payments</p>
         {(data.sales_payments ?? []).map((p: any) => (
           <div key={p.id} className="flex justify-between text-xs py-0.5">
-            <span>{PAYMENT_MODE_LABELS[p.payment_mode]}{p.reference_serial ? ` (${p.reference_serial})` : ''}{p.cheque_number ? ` #${p.cheque_number}` : ''}</span>
+            <span>{PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}{p.reference_serial ? ` (${p.reference_serial})` : ''}{p.cheque_number ? ` #${p.cheque_number}` : ''}</span>
             <span className="font-medium">{formatCurrency(p.amount)}</span>
           </div>
         ))}
@@ -296,11 +318,12 @@ function ReceiptDetail({ data }: { data: any }) {
   return (
     <div className="text-sm">
       <InfoGrid items={[
-        ['Type', data.receipt_type], ['Customer', data.customer_name],
+        ['Type', data.receipt_type.replace('_', ' ')], ['Customer', data.customer_name],
         ...(data.serial_number ? [['Serial No.', data.serial_number] as [string, string]] : []),
         ...(data.repair_type ? [['Repair Type', data.repair_type] as [string, string]] : []),
         ...(data.weight ? [['Weight', `${data.weight}g`] as [string, string]] : []),
-        ['Amount', formatCurrency(data.amount)], ['Payment', data.payment_mode],
+        ['Amount', formatCurrency(data.amount)],
+        ['Payment', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode],
         ...(data.notes ? [['Notes', data.notes] as [string, string]] : []),
       ]} />
     </div>
@@ -313,6 +336,37 @@ function ExpenseDetail({ data }: { data: any }) {
       <InfoGrid items={[
         ['Description', data.description], ['Amount', formatCurrency(data.amount)],
         ['Payment Type', data.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash'],
+        ...(data.notes ? [['Notes', data.notes] as [string, string]] : []),
+      ]} />
+    </div>
+  )
+}
+
+function OldGoldDetail({ data }: { data: any }) {
+  return (
+    <div className="text-sm">
+      <InfoGrid items={[
+        ['Customer', data.customer_name],
+        ...(data.customer_phone ? [['Phone', data.customer_phone] as [string, string]] : []),
+        ['Metal', data.metal_type], ['Purity', data.purity ?? '—'],
+        ['Weight', `${data.weight}g`],
+        ...(data.rate_per_gram ? [['Rate/g', `₹${data.rate_per_gram}`] as [string, string]] : []),
+        ['Amount Paid', formatCurrency(data.total_amount)],
+        ['Payment Mode', data.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash'],
+        ...(data.notes ? [['Notes', data.notes] as [string, string]] : []),
+      ]} />
+    </div>
+  )
+}
+
+function DirectReceiptDetail({ data }: { data: any }) {
+  return (
+    <div className="text-sm">
+      <InfoGrid items={[
+        ['Customer', data.customer_name],
+        ...(data.customer_number ? [['Phone / Ref', data.customer_number] as [string, string]] : []),
+        ['Amount', formatCurrency(data.amount)],
+        ['Payment Mode', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode],
         ...(data.notes ? [['Notes', data.notes] as [string, string]] : []),
       ]} />
     </div>

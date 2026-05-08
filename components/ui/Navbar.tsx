@@ -17,6 +17,7 @@ const adminLinks: NavItem[] = [
   { href: '/admin/qc', label: 'QC Review' },
   { href: '/admin/day', label: 'Day Register' },
   { href: '/admin/reports', label: 'Reports' },
+  { href: '/admin/archival', label: 'Archival' },
   { href: '/admin/items', label: 'Item Master' },
 ]
 
@@ -25,6 +26,8 @@ const staffLinks: NavItem[] = [
   { href: '/staff/sales', label: 'New Sale' },
   { href: '/staff/receipts', label: 'Money Receipt' },
   { href: '/staff/expenses', label: 'Expense' },
+  { href: '/staff/old-gold-purchase', label: 'Old Gold' },
+  { href: '/staff/direct-receipt', label: 'Direct Receipt' },
 ]
 
 export function Navbar({ role, userName }: NavbarProps) {
