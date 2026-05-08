@@ -191,24 +191,24 @@ export default function QCPage() {
               )}
 
               {/* Actions */}
-              {selected.data.status !== 'approved' && (
-                <div className="border-t border-gray-100 pt-4 space-y-3">
+              <div className="border-t border-gray-100 pt-4 space-y-3">
+                {selected.data.status !== 'approved' && (
                   <div className="flex gap-2">
                     <button onClick={() => handleApprove(selected.type, selected.data.id)} disabled={actionLoading}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg">
                       ✓ Approve
                     </button>
                   </div>
-                  <div className="space-y-2">
-                    <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-                      placeholder="Rejection reason (required to reject)" className="input text-sm" />
-                    <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
-                      className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
-                      ✗ Reject
-                    </button>
-                  </div>
+                )}
+                <div className="space-y-2">
+                  <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                    placeholder="Rejection reason (required to reject)" className="input text-sm" />
+                  <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                    ✗ Reject
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
