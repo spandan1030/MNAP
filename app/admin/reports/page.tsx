@@ -103,7 +103,7 @@ export default function ReportsPage() {
 
   useEffect(() => { loadReport() }, [reportDate])
 
-  async function exportPDF() {
+  async function exportPDF(mode: 'save' | 'print' = 'save') {
     if (!data) return
     setExporting(true)
     const { default: jsPDF } = await import('jspdf')
@@ -334,7 +334,12 @@ export default function ReportsPage() {
       styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
     })
 
-    doc.save(`MNAP_Report_${reportDate}.pdf`)
+    if (mode === 'print') {
+      doc.autoPrint()
+      doc.output('dataurlnewwindow')
+    } else {
+      doc.save(`MNAP_Report_${reportDate}.pdf`)
+    }
     setExporting(false)
   }
 
@@ -346,10 +351,16 @@ export default function ReportsPage() {
           <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
           {data && (
-            <button onClick={exportPDF} disabled={exporting}
-              className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
-              {exporting ? 'Exporting…' : '↓ Export PDF'}
-            </button>
+            <>
+              <button onClick={() => exportPDF('print')} disabled={exporting}
+                className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+                {exporting ? 'Working…' : '⎙ Print PDF'}
+              </button>
+              <button onClick={() => exportPDF('save')} disabled={exporting}
+                className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+                {exporting ? 'Exporting…' : '↓ Export PDF'}
+              </button>
+            </>
           )}
         </div>
       </div>

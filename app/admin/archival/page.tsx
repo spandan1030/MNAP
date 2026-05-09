@@ -66,7 +66,7 @@ export default function ArchivalPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 no-print">
         <h1 className="text-2xl font-bold text-gray-900">Archival — All Entries</h1>
         <div className="flex items-center gap-3 flex-wrap">
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
@@ -79,6 +79,12 @@ export default function ArchivalPage() {
               </button>
             ))}
           </div>
+          {data && (
+            <button onClick={() => window.print()}
+              className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+              ⎙ Print
+            </button>
+          )}
         </div>
       </div>
 
