@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PURITY_OPTIONS, PAYMENT_MODE_LABELS } from '@/lib/utils'
 
+function billPrefix() {
+  const n = new Date()
+  const p = (v: number) => String(v).padStart(2, '0')
+  return `${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}-`
+}
+
 interface LineItem {
   item_name: string
   weight: string
@@ -41,7 +47,7 @@ export default function SalesPage() {
   const [error, setError] = useState('')
 
   const [customerName, setCustomerName] = useState('')
-  const [billNumber, setBillNumber] = useState('')
+  const [billNumber, setBillNumber] = useState(() => billPrefix())
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
   const [payments, setPayments] = useState<Payment[]>([defaultPayment()])
   const [oldGoldWeight, setOldGoldWeight] = useState('')
@@ -158,7 +164,7 @@ export default function SalesPage() {
   }
 
   function resetForm() {
-    setCustomerName(''); setBillNumber('')
+    setCustomerName(''); setBillNumber(billPrefix())
     setLineItems([defaultLine()]); setPayments([defaultPayment()])
     setOldGoldWeight(''); setOldGoldAmount(''); setOldSilverWeight(''); setOldSilverAmount('')
     setTimeout(() => setSuccess(false), 4000)
