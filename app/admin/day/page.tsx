@@ -20,6 +20,12 @@ export default function DayRegisterPage() {
   const [closeB, setCloseB] = useState('')
   const [pendingCount, setPendingCount] = useState(0)
   const [expectedCash, setExpectedCash] = useState(0)
+  const [editOpenMode, setEditOpenMode] = useState(false)
+  const [editOpenA, setEditOpenA] = useState('')
+  const [editOpenB, setEditOpenB] = useState('')
+  const [editCloseMode, setEditCloseMode] = useState(false)
+  const [editCloseA, setEditCloseA] = useState('')
+  const [editCloseB, setEditCloseB] = useState('')
 
   useEffect(() => { fetchSession() }, [])
 
@@ -98,6 +104,44 @@ export default function DayRegisterPage() {
     setSubmitting(false)
   }
 
+  async function handleUpdateOpening(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true); setMessage('')
+    const { error } = await supabase.from('day_sessions').update({
+      register_a_opening: parseFloat(editOpenA) || 0,
+      register_b_opening: parseFloat(editOpenB) || 0,
+    }).eq('id', session!.id)
+    if (error) { setMessage('Error: ' + error.message) }
+    else { setMessage('Opening balances updated.'); setEditOpenMode(false); await fetchSession() }
+    setSubmitting(false)
+  }
+
+  async function handleUpdateClosing(e: React.FormEvent) {
+    e.preventDefault()
+    setSubmitting(true); setMessage('')
+    const { error } = await supabase.from('day_sessions').update({
+      register_a_closing: parseFloat(editCloseA) || 0,
+      register_b_closing: parseFloat(editCloseB) || 0,
+    }).eq('id', session!.id)
+    if (error) { setMessage('Error: ' + error.message) }
+    else { setMessage('Closing balances updated.'); setEditCloseMode(false); await fetchSession() }
+    setSubmitting(false)
+  }
+
+  async function handleReopenDay() {
+    setSubmitting(true); setMessage('')
+    const { error } = await supabase.from('day_sessions').update({
+      status: 'open',
+      register_a_closing: null,
+      register_b_closing: null,
+      closed_by: null,
+      closed_at: null,
+    }).eq('id', session!.id)
+    if (error) { setMessage('Error: ' + error.message) }
+    else { setMessage('Day reopened.'); await fetchSession() }
+    setSubmitting(false)
+  }
+
   if (loading) return <div className="text-gray-500 text-sm">Loading…</div>
 
   const closingTotal = (parseFloat(closeA) || 0) + (parseFloat(closeB) || 0)
@@ -123,9 +167,27 @@ export default function DayRegisterPage() {
       {session && session.status === 'open' && (
         <div className="space-y-4">
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-sm text-green-800">
-            Day opened at {formatDateTime(session.opened_at)} &nbsp;|&nbsp;
-            Register A: {formatCurrency(session.register_a_opening)} &nbsp;|&nbsp;
-            Register B: {formatCurrency(session.register_b_opening)}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span>
+                Day opened at {formatDateTime(session.opened_at)} &nbsp;|&nbsp;
+                Register A: {formatCurrency(session.register_a_opening)} &nbsp;|&nbsp;
+                Register B: {formatCurrency(session.register_b_opening)}
+              </span>
+              <button onClick={() => { setEditOpenA(String(session.register_a_opening ?? 0)); setEditOpenB(String(session.register_b_opening ?? 0)); setEditOpenMode(true) }}
+                className="text-xs text-green-700 border border-green-400 px-2 py-1 rounded hover:bg-green-100 transition-colors">
+                ✎ Edit Opening
+              </button>
+            </div>
+            {editOpenMode && (
+              <form onSubmit={handleUpdateOpening} className="mt-3 space-y-2 border-t border-green-200 pt-3">
+                <Field label="Register A — Opening (₹)" value={editOpenA} onChange={setEditOpenA} />
+                <Field label="Register B — Opening (₹)" value={editOpenB} onChange={setEditOpenB} />
+                <div className="flex gap-2">
+                  <button type="submit" disabled={submitting} className="bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">Save</button>
+                  <button type="button" onClick={() => setEditOpenMode(false)} className="text-xs text-gray-600 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50">Cancel</button>
+                </div>
+              </form>
+            )}
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -163,7 +225,19 @@ export default function DayRegisterPage() {
 
       {session && session.status === 'closed' && (
         <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 space-y-2 text-sm">
-          <p className="font-semibold text-gray-700">Day Closed — {today}</p>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="font-semibold text-gray-700">Day Closed — {today}</p>
+            <div className="flex gap-2">
+              <button onClick={() => { setEditCloseA(String(session.register_a_closing ?? 0)); setEditCloseB(String(session.register_b_closing ?? 0)); setEditCloseMode(true) }}
+                className="text-xs text-gray-600 border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 transition-colors">
+                ✎ Edit Closing
+              </button>
+              <button onClick={handleReopenDay} disabled={submitting}
+                className="text-xs text-amber-700 border border-amber-400 px-2 py-1 rounded hover:bg-amber-50 transition-colors">
+                ↩ Reopen Day
+              </button>
+            </div>
+          </div>
           <Row label="Closed at" value={session.closed_at ? formatDateTime(session.closed_at) : '—'} />
           <Row label="Register A Closing" value={formatCurrency(session.register_a_closing ?? 0)} />
           <Row label="Register B Closing" value={formatCurrency(session.register_b_closing ?? 0)} />
@@ -173,6 +247,16 @@ export default function DayRegisterPage() {
             value={formatCurrency(((session.register_a_closing ?? 0) + (session.register_b_closing ?? 0)) - expectedCash)}
             className={Math.abs(((session.register_a_closing ?? 0) + (session.register_b_closing ?? 0)) - expectedCash) > 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}
           />
+          {editCloseMode && (
+            <form onSubmit={handleUpdateClosing} className="space-y-2 border-t border-gray-200 pt-3 mt-2">
+              <Field label="Register A — Closing (₹)" value={editCloseA} onChange={setEditCloseA} />
+              <Field label="Register B — Closing (₹)" value={editCloseB} onChange={setEditCloseB} />
+              <div className="flex gap-2">
+                <button type="submit" disabled={submitting} className="bg-gray-700 hover:bg-gray-800 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">Save</button>
+                <button type="button" onClick={() => setEditCloseMode(false)} className="text-xs text-gray-600 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50">Cancel</button>
+              </div>
+            </form>
+          )}
         </div>
       )}
 

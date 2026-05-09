@@ -35,6 +35,7 @@ export default function ArchivalPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   useEffect(() => { loadData() }, [date])
 
@@ -77,6 +78,145 @@ export default function ArchivalPage() {
       filtered(data.approvalSales).length
     : 0
 
+  async function sharePDF() {
+    if (!data) return
+    setSharing(true)
+    const { default: jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
+    const doc = new jsPDF()
+    let y = 14
+
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold')
+    doc.text(`M N Alankar Palace — Archival: ${date}`, 14, y); y += 8
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal')
+    doc.setTextColor(120, 120, 120)
+    doc.text(`Status: ${statusFilter} | ${totalCount} entries`, 14, y)
+    doc.setTextColor(0, 0, 0); y += 6
+
+    const hdr = (text: string) => {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold')
+      doc.setFillColor(245, 158, 11); doc.rect(14, y, 182, 6, 'F')
+      doc.setTextColor(255, 255, 255); doc.text(text, 16, y + 4.2)
+      doc.setTextColor(0, 0, 0); y += 7
+    }
+
+    const bills = filtered(data.bills)
+    if (bills.length > 0) {
+      hdr(`Sales Bills — ${bills.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Bill #', 'Customer', 'Total', 'Old Metal', 'Payments', 'Status']],
+        body: bills.map((b: any) => [
+          b.bill_number, b.customer_name, formatCurrency(b.total_amount),
+          [(b.old_gold_amount ?? 0) > 0 ? `Gold: ${formatCurrency(b.old_gold_amount)}` : '', (b.old_silver_amount ?? 0) > 0 ? `Silver: ${formatCurrency(b.old_silver_amount)}` : ''].filter(Boolean).join(' / ') || '—',
+          (b.sales_payments ?? []).map((p: any) => `${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}: ${formatCurrency(p.amount)}`).join(' | '),
+          b.status,
+        ]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 5
+    }
+
+    const receipts = filtered(data.receipts)
+    if (receipts.length > 0) {
+      hdr(`Money Receipts — ${receipts.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Type', 'Serial', 'Customer', 'Amount', 'Settlement', 'Status']],
+        body: receipts.map((r: any) => [
+          r.receipt_type.replace('_', ' '), r.serial_number ?? '—', r.customer_name,
+          formatCurrency(r.amount), receiptSettlementLabel(r), r.status,
+        ]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 5
+    }
+
+    const expenses = filtered(data.expenses)
+    if (expenses.length > 0) {
+      hdr(`Expenses — ${expenses.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Description', 'Payment', 'Amount', 'Status']],
+        body: expenses.map((e: any) => [e.description, e.payment_type.replace('_', ' '), formatCurrency(e.amount), e.status]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 5
+    }
+
+    const ogPurchases = filtered(data.ogPurchases)
+    if (ogPurchases.length > 0) {
+      hdr(`Old Metal Purchases — ${ogPurchases.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Customer', 'Metal', 'Purity', 'Weight', 'Amount', 'Payment', 'Status']],
+        body: ogPurchases.map((p: any) => [
+          p.customer_name ?? '—', p.metal_type, p.purity ?? '—',
+          p.weight ? `${p.weight}g` : '—', formatCurrency(p.total_amount),
+          PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode, p.status,
+        ]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 5
+    }
+
+    const drReceipts = filtered(data.drReceipts)
+    if (drReceipts.length > 0) {
+      hdr(`Direct Receipts — ${drReceipts.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Customer', 'Ref', 'Amount', 'Payment', 'Status']],
+        body: drReceipts.map((r: any) => [
+          r.customer_name, r.customer_number ?? '—', formatCurrency(r.amount),
+          PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode, r.status,
+        ]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 5
+    }
+
+    const partyPayments = filtered(data.partyPayments)
+    if (partyPayments.length > 0) {
+      hdr(`Party Payments — ${partyPayments.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Party', 'Amount', 'Payment', 'Status']],
+        body: partyPayments.map((p: any) => [
+          p.party_name, formatCurrency(p.amount),
+          PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode, p.status,
+        ]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 5
+    }
+
+    const approvalSales = filtered(data.approvalSales)
+    if (approvalSales.length > 0) {
+      hdr(`Approval / Party Sales — ${approvalSales.length} entries`)
+      autoTable(doc, {
+        startY: y,
+        head: [['Party', 'Type', 'Items', 'Status']],
+        body: approvalSales.map((a: any) => [
+          a.party_name, a.transaction_type,
+          (a.approval_sale_items ?? []).map((i: any) => `${i.item_name} (${i.metal_type})`).join(', ') || '—',
+          a.status,
+        ]),
+        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
+      })
+    }
+
+    const filename = `MNAP_Archival_${date}.pdf`
+    const blob = doc.output('blob')
+    const file = new File([blob], filename, { type: 'application/pdf' })
+    if (typeof navigator !== 'undefined' && (navigator as any).canShare?.({ files: [file] })) {
+      await (navigator as any).share({ files: [file], title: `MNAP Archival ${date}` })
+    } else {
+      doc.save(filename)
+      window.open('https://web.whatsapp.com', '_blank')
+    }
+    setSharing(false)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3 no-print">
@@ -93,10 +233,16 @@ export default function ArchivalPage() {
             ))}
           </div>
           {data && (
-            <button onClick={printLandscape}
-              className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
-              ⎙ Print
-            </button>
+            <>
+              <button onClick={sharePDF} disabled={sharing}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+                {sharing ? 'Preparing…' : '💬 WhatsApp'}
+              </button>
+              <button onClick={printLandscape}
+                className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+                ⎙ Print
+              </button>
+            </>
           )}
         </div>
       </div>

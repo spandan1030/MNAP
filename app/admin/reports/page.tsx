@@ -103,7 +103,7 @@ export default function ReportsPage() {
 
   useEffect(() => { loadReport() }, [reportDate])
 
-  async function exportPDF(mode: 'save' | 'print' = 'save') {
+  async function exportPDF(mode: 'save' | 'print' | 'share' = 'save') {
     if (!data) return
     setExporting(true)
     const { default: jsPDF } = await import('jspdf')
@@ -337,6 +337,15 @@ export default function ReportsPage() {
     if (mode === 'print') {
       doc.autoPrint()
       doc.output('dataurlnewwindow')
+    } else if (mode === 'share') {
+      const blob = doc.output('blob')
+      const file = new File([blob], `MNAP_Report_${reportDate}.pdf`, { type: 'application/pdf' })
+      if (typeof navigator !== 'undefined' && (navigator as any).canShare?.({ files: [file] })) {
+        await (navigator as any).share({ files: [file], title: `MNAP Report ${reportDate}` })
+      } else {
+        doc.save(`MNAP_Report_${reportDate}.pdf`)
+        window.open('https://web.whatsapp.com', '_blank')
+      }
     } else {
       doc.save(`MNAP_Report_${reportDate}.pdf`)
     }
@@ -352,6 +361,10 @@ export default function ReportsPage() {
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
           {data && (
             <>
+              <button onClick={() => exportPDF('share')} disabled={exporting}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+                {exporting ? 'Working…' : '💬 WhatsApp'}
+              </button>
               <button onClick={() => exportPDF('print')} disabled={exporting}
                 className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
                 {exporting ? 'Working…' : '⎙ Print PDF'}
