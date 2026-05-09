@@ -10,6 +10,17 @@ type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses' | 'old_gold' | 'di
 
 interface AuditEntry { field_name: string; original_value: string; edited_value: string; edit_reason: string; edited_at: string }
 
+const EDITABLE_FIELDS: Record<string, string[]> = {
+  sales:        ['customer_name', 'customer_phone', 'bill_number', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount'],
+  receipt:      ['receipt_type', 'serial_number', 'customer_name', 'repair_type', 'weight', 'amount', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount', 'payment_mode', 'notes'],
+  expense:      ['description', 'amount', 'payment_type', 'notes'],
+  old_gold:     ['customer_name', 'customer_phone', 'metal_type', 'purity', 'weight', 'rate_per_gram', 'total_amount', 'payment_mode', 'notes'],
+  direct:       ['customer_name', 'customer_number', 'amount', 'payment_mode', 'notes'],
+  payment:      ['party_name', 'amount', 'payment_mode', 'notes'],
+  approval_sale:['party_name', 'transaction_type'],
+}
+const NUMERIC_FIELDS = new Set(['amount', 'total_amount', 'weight', 'rate_per_gram', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount'])
+
 function getTableName(type: string): string {
   const map: Record<string, string> = {
     sales: 'sales_bills', receipt: 'money_receipts', expense: 'expenses',
@@ -44,6 +55,8 @@ export default function QCPage() {
   const [selected, setSelected] = useState<{ type: string; data: any } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [editReason, setEditReason] = useState('')
+  const [editMode, setEditMode] = useState(false)
+  const [editData, setEditData] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
@@ -106,11 +119,13 @@ export default function QCPage() {
     setAuditLog(data ?? [])
   }
 
+  function closeModal() { setSelected(null); setEditMode(false); setEditData(null); setEditReason('') }
+
   async function handleApprove(type: string, id: string) {
     setActionLoading(true)
     await supabase.from(getTableName(type)).update({ status: 'approved' }).eq('id', id)
     setMessage('Entry approved.')
-    setSelected(null)
+    closeModal()
     await fetchEntries()
     setActionLoading(false)
   }
@@ -121,26 +136,52 @@ export default function QCPage() {
     await supabase.from(getTableName(type)).update({ status: 'rejected', rejection_reason: rejectReason }).eq('id', id)
     setMessage('Entry rejected.')
     setRejectReason('')
-    setSelected(null)
+    closeModal()
     await fetchEntries()
     setActionLoading(false)
   }
 
-  async function handleEdit(type: string, id: string, field: string, oldVal: string, newVal: string) {
-    if (oldVal === newVal) return
+  async function handleSaveEdits() {
+    if (!selected || !editData || !editReason.trim()) return
+    setActionLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from(getTableName(type)).update({ [field]: newVal, status: 'edited' }).eq('id', id)
-    await supabase.from('audit_log').insert({
-      table_name: getTableName(type),
-      record_id: id,
-      field_name: field,
-      original_value: oldVal,
-      edited_value: newVal,
-      edited_by: user!.id,
-      edit_reason: editReason || null,
-    })
-    await loadAuditLog(id)
+
+    const fields = EDITABLE_FIELDS[selected.type] ?? []
+    const updateObj: any = { status: 'edited' }
+    const auditRows: any[] = []
+
+    for (const field of fields) {
+      const raw = editData[field]
+      const coerced = NUMERIC_FIELDS.has(field)
+        ? (raw === '' || raw == null ? null : parseFloat(String(raw)) || null)
+        : (raw === '' ? null : raw ?? null)
+      const original = selected.data[field] ?? null
+      if (String(original ?? '') !== String(coerced ?? '')) {
+        updateObj[field] = coerced
+        auditRows.push({
+          table_name: getTableName(selected.type),
+          record_id: selected.data.id,
+          field_name: field,
+          original_value: original != null ? String(original) : null,
+          edited_value: coerced != null ? String(coerced) : null,
+          edited_by: user!.id,
+          edit_reason: editReason,
+        })
+      }
+    }
+
+    if (auditRows.length === 0) {
+      setEditMode(false)
+      setActionLoading(false)
+      return
+    }
+
+    await supabase.from(getTableName(selected.type)).update(updateObj).eq('id', selected.data.id)
+    await supabase.from('audit_log').insert(auditRows)
+    setMessage(`Entry updated — ${auditRows.length} field(s) changed.`)
+    closeModal()
     await fetchEntries()
+    setActionLoading(false)
   }
 
   const allEntries = [
@@ -179,18 +220,26 @@ export default function QCPage() {
         <div className="space-y-2">
           {allEntries.map(({ type, data }) => (
             <EntryRow key={data.id} type={type} data={data}
-              onOpen={() => { setSelected({ type, data }); setRejectReason(''); setMessage(''); loadAuditLog(data.id) }} />
+              onOpen={() => {
+                setSelected({ type, data })
+                setRejectReason(''); setEditReason(''); setMessage('')
+                setEditMode(false); setEditData(null)
+                loadAuditLog(data.id)
+              }} />
           ))}
         </div>
       )}
 
       {selected && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto"
-          onClick={e => { if (e.target === e.currentTarget) setSelected(null) }}>
+          onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
           <div className="bg-white rounded-2xl w-full max-w-2xl my-8 shadow-2xl">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">{getEntryLabel(selected.type, selected.data)}</h2>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+              <div>
+                <h2 className="font-semibold text-gray-900">{getEntryLabel(selected.type, selected.data)}</h2>
+                {editMode && <p className="text-xs text-amber-600 mt-0.5">Edit mode — all changes will be logged</p>}
+              </div>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
             </div>
 
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
@@ -200,51 +249,86 @@ export default function QCPage() {
                 <span className="text-xs text-gray-400">by {selected.data.profiles?.name ?? 'Staff'}</span>
               </div>
 
-              {selected.data.rejection_reason && (
+              {!editMode && selected.data.rejection_reason && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
                   Rejection reason: {selected.data.rejection_reason}
                 </div>
               )}
 
-              {selected.type === 'sales' && <SalesBillDetail data={selected.data} />}
-              {selected.type === 'receipt' && <ReceiptDetail data={selected.data} />}
-              {selected.type === 'expense' && <ExpenseDetail data={selected.data} />}
-              {selected.type === 'old_gold' && <OldGoldDetail data={selected.data} />}
-              {selected.type === 'direct' && <DirectReceiptDetail data={selected.data} />}
-              {selected.type === 'payment' && <PartyPaymentDetail data={selected.data} />}
-              {selected.type === 'approval_sale' && <ApprovalSaleDetail data={selected.data} />}
+              {editMode ? (
+                <div className="space-y-4">
+                  {selected.type === 'sales'        && <SalesBillEditForm     data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
+                  {selected.type === 'receipt'      && <ReceiptEditForm       data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
+                  {selected.type === 'expense'      && <ExpenseEditForm       data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
+                  {selected.type === 'old_gold'     && <OldGoldEditForm       data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
+                  {selected.type === 'direct'       && <DirectReceiptEditForm data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
+                  {selected.type === 'payment'      && <PartyPaymentEditForm  data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
+                  {selected.type === 'approval_sale'&& <ApprovalSaleEditForm  data={editData} set={(f, v) => setEditData((p: any) => ({ ...p, [f]: v }))} />}
 
-              {auditLog.length > 0 && (
-                <div className="border-t border-gray-100 pt-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Audit Trail</p>
-                  <div className="space-y-1.5">
-                    {auditLog.map((a, i) => (
-                      <div key={i} className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
-                        <span className="font-medium">{a.field_name}</span>: "{a.original_value}" → "{a.edited_value}"
-                        {a.edit_reason && <span className="text-blue-500"> ({a.edit_reason})</span>}
-                        <span className="text-blue-400 ml-1">{formatDateTime(a.edited_at)}</span>
-                      </div>
-                    ))}
+                  <div className="border-t border-gray-100 pt-3 space-y-2">
+                    <input value={editReason} onChange={e => setEditReason(e.target.value)}
+                      placeholder="Reason for edit (required)" className="input text-sm" />
+                    <div className="flex gap-2">
+                      <button onClick={handleSaveEdits} disabled={actionLoading || !editReason.trim()}
+                        className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                        {actionLoading ? 'Saving…' : 'Save Changes'}
+                      </button>
+                      <button onClick={() => { setEditMode(false); setEditData(null); setEditReason('') }}
+                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold py-2 rounded-lg">
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
-              )}
+              ) : (
+                <>
+                  {selected.type === 'sales'        && <SalesBillDetail     data={selected.data} />}
+                  {selected.type === 'receipt'      && <ReceiptDetail       data={selected.data} />}
+                  {selected.type === 'expense'      && <ExpenseDetail       data={selected.data} />}
+                  {selected.type === 'old_gold'     && <OldGoldDetail       data={selected.data} />}
+                  {selected.type === 'direct'       && <DirectReceiptDetail data={selected.data} />}
+                  {selected.type === 'payment'      && <PartyPaymentDetail  data={selected.data} />}
+                  {selected.type === 'approval_sale'&& <ApprovalSaleDetail  data={selected.data} />}
 
-              <div className="border-t border-gray-100 pt-4 space-y-3">
-                {selected.data.status !== 'approved' && (
-                  <button onClick={() => handleApprove(selected.type, selected.data.id)} disabled={actionLoading}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2 rounded-lg">
-                    ✓ Approve
-                  </button>
-                )}
-                <div className="space-y-2">
-                  <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-                    placeholder="Rejection reason (required to reject)" className="input text-sm" />
-                  <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
-                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
-                    ✗ Reject
-                  </button>
-                </div>
-              </div>
+                  {auditLog.length > 0 && (
+                    <div className="border-t border-gray-100 pt-3">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Audit Trail</p>
+                      <div className="space-y-1.5">
+                        {auditLog.map((a, i) => (
+                          <div key={i} className="bg-blue-50 rounded-lg p-2 text-xs text-blue-700">
+                            <span className="font-medium">{a.field_name}</span>: "{a.original_value}" → "{a.edited_value}"
+                            {a.edit_reason && <span className="text-blue-500"> ({a.edit_reason})</span>}
+                            <span className="text-blue-400 ml-1">{formatDateTime(a.edited_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-gray-100 pt-4 space-y-2">
+                    {selected.data.status !== 'approved' && (
+                      <button onClick={() => handleApprove(selected.type, selected.data.id)} disabled={actionLoading}
+                        className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                        ✓ Approve
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setEditMode(true); setEditData({ ...selected.data }); setEditReason('') }}
+                      disabled={actionLoading}
+                      className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-sm font-semibold py-2 rounded-lg">
+                      ✎ Edit Entry
+                    </button>
+                    <div className="space-y-2">
+                      <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                        placeholder="Rejection reason (required to reject)" className="input text-sm" />
+                      <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
+                        className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                        ✗ Reject
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -252,6 +336,8 @@ export default function QCPage() {
     </div>
   )
 }
+
+// ─── Shared helpers ──────────────────────────────────────────────────────────
 
 function FilterGroup({ label, value, onChange, options, labels = {} }: {
   label: string; value: string; onChange: (v: string) => void; options: string[]; labels?: Record<string, string>
@@ -289,6 +375,49 @@ function EntryRow({ type, data, onOpen }: { type: string; data: any; onOpen: () 
     </div>
   )
 }
+
+function InfoGrid({ items }: { items: [string, string][] }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+      {items.map(([k, v]) => (
+        <div key={k}>
+          <span className="text-gray-500 text-xs">{k}</span>
+          <p className="text-gray-900 font-medium">{v}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Edit field primitives ───────────────────────────────────────────────────
+
+function EField({ label, value, onChange, type = 'text', step }: {
+  label: string; value: any; onChange: (v: string) => void; type?: string; step?: string
+}) {
+  return (
+    <div>
+      <span className="text-gray-500 text-xs">{label}</span>
+      <input type={type} step={step} value={value ?? ''} onChange={e => onChange(e.target.value)}
+        className="block w-full mt-0.5 border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500" />
+    </div>
+  )
+}
+
+function ESel({ label, value, onChange, options }: {
+  label: string; value: any; onChange: (v: string) => void; options: [string, string][]
+}) {
+  return (
+    <div>
+      <span className="text-gray-500 text-xs">{label}</span>
+      <select value={value ?? ''} onChange={e => onChange(e.target.value)}
+        className="block w-full mt-0.5 border border-gray-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500">
+        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+      </select>
+    </div>
+  )
+}
+
+// ─── Detail views ────────────────────────────────────────────────────────────
 
 function SalesBillDetail({ data }: { data: any }) {
   return (
@@ -469,15 +598,139 @@ function DirectReceiptDetail({ data }: { data: any }) {
   )
 }
 
-function InfoGrid({ items }: { items: [string, string][] }) {
+// ─── Edit forms ──────────────────────────────────────────────────────────────
+
+function SalesBillEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-      {items.map(([k, v]) => (
-        <div key={k}>
-          <span className="text-gray-500 text-xs">{k}</span>
-          <p className="text-gray-900 font-medium">{v}</p>
+    <div className="space-y-4 text-sm">
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Bill Details</p>
+        <div className="grid grid-cols-2 gap-3">
+          <EField label="Customer Name" value={data.customer_name} onChange={v => set('customer_name', v)} />
+          <EField label="Phone" value={data.customer_phone} onChange={v => set('customer_phone', v)} />
+          <div className="col-span-2">
+            <EField label="Bill #" value={data.bill_number} onChange={v => set('bill_number', v)} />
+          </div>
         </div>
-      ))}
+      </div>
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Old Metal Exchange</p>
+        <div className="grid grid-cols-2 gap-3">
+          <EField label="Old Gold Weight (g)" value={data.old_gold_weight} onChange={v => set('old_gold_weight', v)} type="number" step="0.001" />
+          <EField label="Old Gold Amount (₹)" value={data.old_gold_amount} onChange={v => set('old_gold_amount', v)} type="number" step="0.01" />
+          <EField label="Old Silver Weight (g)" value={data.old_silver_weight} onChange={v => set('old_silver_weight', v)} type="number" step="0.001" />
+          <EField label="Old Silver Amount (₹)" value={data.old_silver_amount} onChange={v => set('old_silver_amount', v)} type="number" step="0.01" />
+        </div>
+      </div>
+      <p className="text-xs text-gray-400 italic">Line items and payments cannot be edited here.</p>
+    </div>
+  )
+}
+
+function ReceiptEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <ESel label="Type" value={data.receipt_type} onChange={v => set('receipt_type', v)}
+        options={[['advance','Advance'],['sip','SIP'],['customer_credit','Customer Credit'],['repair','Repair']]} />
+      <EField label="Customer Name" value={data.customer_name} onChange={v => set('customer_name', v)} />
+      {(data.receipt_type === 'advance' || data.receipt_type === 'sip') &&
+        <EField label="Serial No." value={data.serial_number} onChange={v => set('serial_number', v)} />}
+      {data.receipt_type === 'repair' && <>
+        <EField label="Repair Type" value={data.repair_type} onChange={v => set('repair_type', v)} />
+        <EField label="Item Weight (g)" value={data.weight} onChange={v => set('weight', v)} type="number" step="0.001" />
+      </>}
+      <EField label="Total Amount (₹)" value={data.amount} onChange={v => set('amount', v)} type="number" step="0.01" />
+      <ESel label="Payment Mode" value={data.payment_mode} onChange={v => set('payment_mode', v)}
+        options={[['cash','Cash'],['card','Card'],['upi','UPI'],['cheque','Cheque']]} />
+      <EField label="Old Gold Weight (g)" value={data.old_gold_weight} onChange={v => set('old_gold_weight', v)} type="number" step="0.001" />
+      <EField label="Old Gold Amount (₹)" value={data.old_gold_amount} onChange={v => set('old_gold_amount', v)} type="number" step="0.01" />
+      <EField label="Old Silver Weight (g)" value={data.old_silver_weight} onChange={v => set('old_silver_weight', v)} type="number" step="0.001" />
+      <EField label="Old Silver Amount (₹)" value={data.old_silver_amount} onChange={v => set('old_silver_amount', v)} type="number" step="0.01" />
+      <div className="col-span-2">
+        <EField label="Notes" value={data.notes} onChange={v => set('notes', v)} />
+      </div>
+    </div>
+  )
+}
+
+function ExpenseEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="col-span-2">
+        <EField label="Description" value={data.description} onChange={v => set('description', v)} />
+      </div>
+      <EField label="Amount (₹)" value={data.amount} onChange={v => set('amount', v)} type="number" step="0.01" />
+      <ESel label="Payment Type" value={data.payment_type} onChange={v => set('payment_type', v)}
+        options={[['cash','Cash'],['bank_transfer','Bank Transfer']]} />
+      <div className="col-span-2">
+        <EField label="Notes" value={data.notes} onChange={v => set('notes', v)} />
+      </div>
+    </div>
+  )
+}
+
+function OldGoldEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <EField label="Customer Name" value={data.customer_name} onChange={v => set('customer_name', v)} />
+      <EField label="Phone" value={data.customer_phone} onChange={v => set('customer_phone', v)} />
+      <ESel label="Metal Type" value={data.metal_type} onChange={v => set('metal_type', v)}
+        options={[['gold','Gold'],['silver','Silver']]} />
+      <EField label="Purity" value={data.purity} onChange={v => set('purity', v)} />
+      <EField label="Weight (g)" value={data.weight} onChange={v => set('weight', v)} type="number" step="0.001" />
+      <EField label="Rate/g (₹)" value={data.rate_per_gram} onChange={v => set('rate_per_gram', v)} type="number" step="0.01" />
+      <EField label="Total Amount (₹)" value={data.total_amount} onChange={v => set('total_amount', v)} type="number" step="0.01" />
+      <ESel label="Payment Mode" value={data.payment_mode} onChange={v => set('payment_mode', v)}
+        options={[['cash','Cash'],['bank_transfer','Bank Transfer']]} />
+      <div className="col-span-2">
+        <EField label="Notes" value={data.notes} onChange={v => set('notes', v)} />
+      </div>
+    </div>
+  )
+}
+
+function DirectReceiptEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <EField label="Customer Name" value={data.customer_name} onChange={v => set('customer_name', v)} />
+      <EField label="Phone / Ref" value={data.customer_number} onChange={v => set('customer_number', v)} />
+      <EField label="Amount (₹)" value={data.amount} onChange={v => set('amount', v)} type="number" step="0.01" />
+      <ESel label="Payment Mode" value={data.payment_mode} onChange={v => set('payment_mode', v)}
+        options={[['cash','Cash'],['card','Card'],['upi','UPI'],['phonepe','PhonePe'],['cheque','Cheque'],['bank_transfer','Bank Transfer']]} />
+      <div className="col-span-2">
+        <EField label="Notes" value={data.notes} onChange={v => set('notes', v)} />
+      </div>
+    </div>
+  )
+}
+
+function PartyPaymentEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="col-span-2">
+        <EField label="Party Name" value={data.party_name} onChange={v => set('party_name', v)} />
+      </div>
+      <EField label="Amount (₹)" value={data.amount} onChange={v => set('amount', v)} type="number" step="0.01" />
+      <ESel label="Payment Mode" value={data.payment_mode} onChange={v => set('payment_mode', v)}
+        options={[['cash','Cash'],['bank_transfer','Bank Transfer']]} />
+      <div className="col-span-2">
+        <EField label="Notes" value={data.notes} onChange={v => set('notes', v)} />
+      </div>
+    </div>
+  )
+}
+
+function ApprovalSaleEditForm({ data, set }: { data: any; set: (f: string, v: any) => void }) {
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <EField label="Party Name" value={data.party_name} onChange={v => set('party_name', v)} />
+        </div>
+        <ESel label="Transaction Type" value={data.transaction_type} onChange={v => set('transaction_type', v)}
+          options={[['approval','Approval (Sent to Party)'],['sale','Party Sale']]} />
+      </div>
+      <p className="text-xs text-gray-400 italic">Line items cannot be edited here.</p>
     </div>
   )
 }
