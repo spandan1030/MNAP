@@ -345,7 +345,7 @@ function SalesBillDetail({ data }: { data: any }) {
 function ReceiptDetail({ data }: { data: any }) {
   const metalTotal = (data.old_gold_amount ?? 0) + (data.old_silver_amount ?? 0)
   const cashPortion = data.amount - metalTotal
-  const hasMetalExchange = (data.old_gold_weight ?? 0) > 0 || (data.old_silver_weight ?? 0) > 0
+  const hasMetalExchange = metalTotal > 0
   return (
     <div className="space-y-3 text-sm">
       <InfoGrid items={[
@@ -359,8 +359,8 @@ function ReceiptDetail({ data }: { data: any }) {
       {hasMetalExchange && (
         <div className="bg-gray-50 rounded-lg p-3">
           <p className="text-xs font-semibold text-gray-500 mb-1">Old Metal Exchange</p>
-          {(data.old_gold_weight ?? 0) > 0 && <p>Gold: {data.old_gold_weight}g — {formatCurrency(data.old_gold_amount)}</p>}
-          {(data.old_silver_weight ?? 0) > 0 && <p>Silver: {data.old_silver_weight}g — {formatCurrency(data.old_silver_amount)}</p>}
+          {(data.old_gold_amount ?? 0) > 0 && <p>Gold{data.old_gold_weight ? `: ${data.old_gold_weight}g` : ''} — {formatCurrency(data.old_gold_amount)}</p>}
+          {(data.old_silver_amount ?? 0) > 0 && <p>Silver{data.old_silver_weight ? `: ${data.old_silver_weight}g` : ''} — {formatCurrency(data.old_silver_amount)}</p>}
         </div>
       )}
       {cashPortion > 0.005 ? (
