@@ -47,7 +47,7 @@ export default function SalesPage() {
   const [error, setError] = useState('')
 
   const [customerName, setCustomerName] = useState('')
-  const [billNumber, setBillNumber] = useState(() => billPrefix())
+  const [billNumber, setBillNumber] = useState('')
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
   const [payments, setPayments] = useState<Payment[]>([defaultPayment()])
   const [oldGoldWeight, setOldGoldWeight] = useState('')
@@ -116,7 +116,7 @@ export default function SalesPage() {
 
     const { data: bill, error: billErr } = await supabase.from('sales_bills').insert({
       day_session_id: sessionId,
-      bill_number: billNumber,
+      bill_number: billPrefix() + billNumber,
       customer_name: customerName,
       customer_phone: null,
       metal_type: firstItem.metal_type,
@@ -164,7 +164,7 @@ export default function SalesPage() {
   }
 
   function resetForm() {
-    setCustomerName(''); setBillNumber(billPrefix())
+    setCustomerName(''); setBillNumber('')
     setLineItems([defaultLine()]); setPayments([defaultPayment()])
     setOldGoldWeight(''); setOldGoldAmount(''); setOldSilverWeight(''); setOldSilverAmount('')
     setTimeout(() => setSuccess(false), 4000)
