@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PURITY_OPTIONS } from '@/lib/utils'
+import { Toast } from '@/components/ui/Toast'
 
 interface LineItem {
   item_name: string
@@ -95,7 +96,7 @@ export default function ApprovalSalesPage() {
 
   function resetForm() {
     setPartyName(''); setTransactionType('approval'); setLineItems([defaultLine()])
-    setTimeout(() => setSuccess(false), 4000)
+    setTimeout(() => setSuccess(false), 3000)
   }
 
   return (
@@ -105,11 +106,7 @@ export default function ApprovalSalesPage() {
         <p className="text-sm text-gray-500 mt-1">Record items given on approval or sold to a party with no cash exchange.</p>
       </div>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
-          ✓ Entry submitted successfully and is pending admin review.
-        </div>
-      )}
+      <Toast show={success} message="Entry submitted successfully and is pending admin review." />
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Header */}

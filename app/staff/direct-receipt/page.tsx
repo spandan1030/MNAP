@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Toast } from '@/components/ui/Toast'
 
 const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },
@@ -57,18 +58,14 @@ export default function DirectReceiptPage() {
 
   function resetForm() {
     setCustomerName(''); setCustomerNumber(''); setAmount(''); setPaymentMode('cash'); setNotes('')
-    setTimeout(() => setSuccess(false), 4000)
+    setTimeout(() => setSuccess(false), 3000)
   }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Direct Money Receipt — Module F</h1>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
-          ✓ Entry submitted successfully and is pending admin review.
-        </div>
-      )}
+      <Toast show={success} message="Entry submitted successfully and is pending admin review." />
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4">

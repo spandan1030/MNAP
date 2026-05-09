@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Toast } from '@/components/ui/Toast'
 
 type ReceiptType = 'advance' | 'sip' | 'customer_credit' | 'repair'
 const RECEIPT_LABELS: Record<ReceiptType, string> = {
@@ -57,7 +58,7 @@ export default function ReceiptsPage() {
     setTotalAmount(''); setOldGoldWeight(''); setOldGoldAmount('')
     setOldSilverWeight(''); setOldSilverAmount('')
     setPaymentMode('cash'); setPaymentAmount(''); setChequeNumber(''); setNotes('')
-    setTimeout(() => setSuccess(false), 4000)
+    setTimeout(() => setSuccess(false), 3000)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -107,11 +108,7 @@ export default function ReceiptsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Money Receipt — Module B</h1>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
-          ✓ Receipt submitted and pending admin review.
-        </div>
-      )}
+      <Toast show={success} message="Receipt submitted and pending admin review." />
 
       {/* Receipt Type */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Toast } from '@/components/ui/Toast'
 
 export default function OldGoldPurchasePage() {
   const supabase = createClient()
@@ -57,7 +58,7 @@ export default function OldGoldPurchasePage() {
   function resetForm() {
     setCustomerName(''); setCustomerPhone(''); setMetalType('gold'); setPurity('')
     setWeight(''); setTotalAmount(''); setPaymentMode('cash'); setNotes('')
-    setTimeout(() => setSuccess(false), 4000)
+    setTimeout(() => setSuccess(false), 3000)
   }
 
   return (
@@ -67,11 +68,7 @@ export default function OldGoldPurchasePage() {
         <p className="text-sm text-gray-500 mt-1">Record old metal (gold/silver) purchased from customer. Cash payments are tracked as cash outflow; bank transfer has no cash register impact.</p>
       </div>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
-          ✓ Entry submitted successfully and is pending admin review.
-        </div>
-      )}
+      <Toast show={success} message="Entry submitted successfully and is pending admin review." />
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div className="grid grid-cols-2 gap-4">

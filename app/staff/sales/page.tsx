@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PURITY_OPTIONS, PAYMENT_MODE_LABELS } from '@/lib/utils'
+import { Toast } from '@/components/ui/Toast'
 
 function billPrefix() {
   const n = new Date()
@@ -167,18 +168,14 @@ export default function SalesPage() {
     setCustomerName(''); setBillNumber('')
     setLineItems([defaultLine()]); setPayments([defaultPayment()])
     setOldGoldWeight(''); setOldGoldAmount(''); setOldSilverWeight(''); setOldSilverAmount('')
-    setTimeout(() => setSuccess(false), 4000)
+    setTimeout(() => setSuccess(false), 3000)
   }
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">New Sale — Module A</h1>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
-          ✓ Bill submitted successfully and is pending admin review.
-        </div>
-      )}
+      <Toast show={success} message="Bill submitted successfully and is pending admin review." />
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Bill Header */}

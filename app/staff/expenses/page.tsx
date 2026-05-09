@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Toast } from '@/components/ui/Toast'
 
 export default function ExpensesPage() {
   const supabase = createClient()
@@ -42,7 +43,7 @@ export default function ExpensesPage() {
     else {
       setSuccess(true)
       setDescription(''); setAmount(''); setPaymentType('cash'); setNotes('')
-      setTimeout(() => setSuccess(false), 4000)
+      setTimeout(() => setSuccess(false), 3000)
     }
     setSubmitting(false)
   }
@@ -51,11 +52,7 @@ export default function ExpensesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Expense Entry — Module C</h1>
 
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-green-700 text-sm font-medium">
-          ✓ Expense submitted and pending admin review.
-        </div>
-      )}
+      <Toast show={success} message="Expense submitted and pending admin review." />
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div>
