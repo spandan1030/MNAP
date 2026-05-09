@@ -12,6 +12,9 @@ export default async function AdminDashboard() {
   let pendingCount = 0
   let todaySales = 0
   let todayExpenses = 0
+  let todayReceipts = 0
+  let todayDirectReceipts = 0
+  let todayPayments = 0
 
   if (session) {
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
@@ -37,6 +40,9 @@ export default async function AdminDashboard() {
     liveCash = opening + cashIn + receiptCashIn + cashDrIn - cashOut - cashOgpOut - cashPpOut
     todaySales = (billsRes.data ?? []).reduce((s: number, b: any) => s + b.total_amount, 0)
     todayExpenses = (expensesRes.data ?? []).reduce((s: number, e: any) => s + e.amount, 0)
+    todayReceipts = (receiptsRes.data ?? []).reduce((s: number, r: any) => s + r.amount, 0)
+    todayDirectReceipts = (drRes.data ?? []).reduce((s: number, r: any) => s + r.amount, 0)
+    todayPayments = (ppRes.data ?? []).reduce((s: number, p: any) => s + p.amount, 0)
 
     const [b, r, e, og, dr, pp] = await Promise.all([
       supabase.from('sales_bills').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
@@ -80,6 +86,9 @@ export default async function AdminDashboard() {
         <StatCard label="Pending Reviews" value={pendingCount.toString()} alert={pendingCount > 0} />
         <StatCard label="Today's Sales" value={formatCurrency(todaySales)} />
         <StatCard label="Today's Expenses" value={formatCurrency(todayExpenses)} />
+        <StatCard label="Today's Money Receipts" value={formatCurrency(todayReceipts)} />
+        <StatCard label="Today's Direct Receipts" value={formatCurrency(todayDirectReceipts)} />
+        <StatCard label="Today's Payments" value={formatCurrency(todayPayments)} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
