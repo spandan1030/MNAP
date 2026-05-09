@@ -212,8 +212,8 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 5 — Old Gold Purchases
-    heading('Section 5 — Old Gold Purchases')
+    // Section 5 — Old Metal Purchases
+    heading('Section 5 — Old Metal Purchases')
     const ogRows = data.oldGoldPurchases.map((p: any) => [
       p.customer_name, p.customer_phone ?? '—', p.metal_type, p.purity ?? '—',
       `${p.weight}g`, p.rate_per_gram ? `₹${p.rate_per_gram}` : '—',
@@ -323,7 +323,7 @@ export default function ReportsPage() {
         ['Cash from Money Receipts', formatCurrency(data.cashReceipts)],
         ['Cash from Direct Receipts', formatCurrency(data.cashDirectIn)],
         ['Cash Expenses', `− ${formatCurrency(data.cashExpenses)}`],
-        ['Cash Old Gold Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
+        ['Cash Old Metal Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
         ['Cash Payments to Parties', `− ${formatCurrency(data.cashPartyPayOut)}`],
         ['Expected Cash In Hand', formatCurrency(data.expectedCash)],
         ['Register A — Closing', formatCurrency(data.session.register_a_closing ?? 0)],
@@ -479,8 +479,8 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 5 — Old Gold Purchases */}
-          <ReportSection title="Section 5 — Old Gold Purchases">
+          {/* Section 5 — Old Metal Purchases */}
+          <ReportSection title="Section 5 — Old Metal Purchases">
             {data.oldGoldPurchases.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No old gold purchases today.</p>
             ) : (
@@ -665,7 +665,7 @@ export default function ReportsPage() {
               ['Cash from Money Receipts', formatCurrency(data.cashReceipts)],
               ['Cash from Direct Receipts', formatCurrency(data.cashDirectIn)],
               ['Cash Expenses', `− ${formatCurrency(data.cashExpenses)}`],
-              ['Cash Old Gold Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
+              ['Cash Old Metal Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
               ['Cash Payments to Parties', `− ${formatCurrency(data.cashPartyPayOut)}`],
               ['Expected Cash In Hand', formatCurrency(data.expectedCash)],
               ['Register A — Closing Balance', formatCurrency(data.session.register_a_closing ?? 0)],

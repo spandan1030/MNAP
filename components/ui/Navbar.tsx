@@ -26,7 +26,7 @@ const staffLinks: NavItem[] = [
   { href: '/staff/sales', label: 'New Sale' },
   { href: '/staff/receipts', label: 'Money Receipt' },
   { href: '/staff/expenses', label: 'Expense' },
-  { href: '/staff/old-gold-purchase', label: 'Old Gold' },
+  { href: '/staff/old-gold-purchase', label: 'Old Metal' },
   { href: '/staff/direct-receipt', label: 'Direct Receipt' },
   { href: '/staff/payments', label: 'Payment' },
   { href: '/staff/approval-sales', label: 'Approval' },

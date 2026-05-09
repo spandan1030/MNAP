@@ -34,7 +34,7 @@ function getEntryLabel(type: string, data: any): string {
   if (type === 'sales') return `Sale — Bill #${data.bill_number}`
   if (type === 'receipt') return `Receipt — ${data.receipt_type.replace('_', ' ')}`
   if (type === 'expense') return `Expense — ${data.description}`
-  if (type === 'old_gold') return `Old Gold Purchase — ${data.customer_name}`
+  if (type === 'old_gold') return `Old Metal Purchase — ${data.customer_name}`
   if (type === 'direct') return `Direct Receipt — ${data.customer_name}`
   if (type === 'payment') return `Payment — ${data.party_name}`
   return `${data.transaction_type === 'sale' ? 'Party Sale' : 'Approval'} — ${data.party_name}`

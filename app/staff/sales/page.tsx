@@ -41,7 +41,6 @@ export default function SalesPage() {
   const [error, setError] = useState('')
 
   const [customerName, setCustomerName] = useState('')
-  const [customerPhone, setCustomerPhone] = useState('')
   const [billNumber, setBillNumber] = useState('')
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
   const [payments, setPayments] = useState<Payment[]>([defaultPayment()])
@@ -113,7 +112,7 @@ export default function SalesPage() {
       day_session_id: sessionId,
       bill_number: billNumber,
       customer_name: customerName,
-      customer_phone: customerPhone,
+      customer_phone: null,
       metal_type: firstItem.metal_type,
       purity: firstItem.purity || null,
       party: billParty,
@@ -159,7 +158,7 @@ export default function SalesPage() {
   }
 
   function resetForm() {
-    setCustomerName(''); setCustomerPhone(''); setBillNumber('')
+    setCustomerName(''); setBillNumber('')
     setLineItems([defaultLine()]); setPayments([defaultPayment()])
     setOldGoldWeight(''); setOldGoldAmount(''); setOldSilverWeight(''); setOldSilverAmount('')
     setTimeout(() => setSuccess(false), 4000)
@@ -178,9 +177,8 @@ export default function SalesPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Bill Header */}
         <Section title="Bill Details">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <Input label="Customer Name *" value={customerName} onChange={setCustomerName} required />
-            <Input label="Customer Phone *" value={customerPhone} onChange={setCustomerPhone} required type="tel" />
             <Input label="Bill Number *" value={billNumber} onChange={setBillNumber} required />
           </div>
         </Section>

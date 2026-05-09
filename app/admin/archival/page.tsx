@@ -200,7 +200,7 @@ export default function ArchivalPage() {
           </Section>
 
           {/* Old Gold Purchases */}
-          <Section title={`Old Gold Purchases (Module E) — ${filtered(data.ogPurchases).length} entries`}>
+          <Section title={`Old Metal Purchases (Module E) — ${filtered(data.ogPurchases).length} entries`}>
             {filtered(data.ogPurchases).length === 0 ? <Empty /> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs border-collapse min-w-[700px]">

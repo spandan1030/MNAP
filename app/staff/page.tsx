@@ -50,7 +50,7 @@ export default async function StaffHome() {
         <RecentList title="Recent Money Receipts" items={(receipts.data ?? []).map(r => ({
           id: r.id, label: r.receipt_type.charAt(0).toUpperCase() + r.receipt_type.slice(1), value: `₹${r.amount}`, status: r.status, time: r.submitted_at
         }))} />
-        <RecentList title="Recent Old Gold Purchases" items={(ogPurchases.data ?? []).map(p => ({
+        <RecentList title="Recent Old Metal Purchases" items={(ogPurchases.data ?? []).map(p => ({
           id: p.id, label: p.customer_name, value: `₹${p.total_amount}`, status: p.status, time: p.submitted_at
         }))} />
         <RecentList title="Recent Direct Receipts" items={(drReceipts.data ?? []).map(r => ({

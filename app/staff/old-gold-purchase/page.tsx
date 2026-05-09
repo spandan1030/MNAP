@@ -63,8 +63,8 @@ export default function OldGoldPurchasePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Old Gold Purchase — Module E</h1>
-        <p className="text-sm text-gray-500 mt-1">Record gold/silver purchased from customer. Cash payments are tracked as cash outflow; bank transfer has no cash register impact.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Old Metal Purchase — Module E</h1>
+        <p className="text-sm text-gray-500 mt-1">Record old metal (gold/silver) purchased from customer. Cash payments are tracked as cash outflow; bank transfer has no cash register impact.</p>
       </div>
 
       {success && (
