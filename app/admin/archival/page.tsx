@@ -16,6 +16,19 @@ function receiptSettlementLabel(r: any): string {
   return parts.join(' + ')
 }
 
+function printLandscape() {
+  const id = '__archival_print_style__'
+  let el = document.getElementById(id) as HTMLStyleElement | null
+  if (!el) {
+    el = document.createElement('style')
+    el.id = id
+    el.textContent = '@page { size: A4 landscape !important; margin: 10mm; }'
+    document.head.appendChild(el)
+  }
+  window.print()
+  setTimeout(() => document.getElementById(id)?.remove(), 1000)
+}
+
 export default function ArchivalPage() {
   const supabase = createClient()
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -80,7 +93,7 @@ export default function ArchivalPage() {
             ))}
           </div>
           {data && (
-            <button onClick={() => window.print()}
+            <button onClick={printLandscape}
               className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
               ⎙ Print
             </button>

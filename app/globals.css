@@ -5,11 +5,12 @@ body {
 }
 
 @media print {
-  @page { size: landscape; margin: 10mm; }
   nav, .no-print { display: none !important; }
   body { background: white !important; }
   main { padding: 0 !important; }
   * { overflow: visible !important; }
+  table { min-width: 0 !important; width: 100% !important; font-size: 9px !important; }
+  .overflow-x-auto { overflow: visible !important; }
 }
 
 @keyframes toast-slide-up {
