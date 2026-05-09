@@ -31,7 +31,7 @@ export default async function AdminDashboard() {
     ])
 
     const cashIn = (salesRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
-    const receiptCashIn = (receiptsRes.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
+    const receiptCashIn = (receiptsRes.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0), 0)
     const cashOut = (expensesRes.data ?? []).filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
     const cashOgpOut = (ogpRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
     const cashDrIn = (drRes.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)

@@ -343,17 +343,36 @@ function SalesBillDetail({ data }: { data: any }) {
 }
 
 function ReceiptDetail({ data }: { data: any }) {
+  const metalTotal = (data.old_gold_amount ?? 0) + (data.old_silver_amount ?? 0)
+  const cashPortion = data.amount - metalTotal
+  const hasMetalExchange = (data.old_gold_weight ?? 0) > 0 || (data.old_silver_weight ?? 0) > 0
   return (
-    <div className="text-sm">
+    <div className="space-y-3 text-sm">
       <InfoGrid items={[
         ['Type', data.receipt_type.replace('_', ' ')], ['Customer', data.customer_name],
         ...(data.serial_number ? [['Serial No.', data.serial_number] as [string, string]] : []),
         ...(data.repair_type ? [['Repair Type', data.repair_type] as [string, string]] : []),
         ...(data.weight ? [['Weight', `${data.weight}g`] as [string, string]] : []),
-        ['Amount', formatCurrency(data.amount)],
-        ['Payment', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode],
+        ['Total Amount', formatCurrency(data.amount)],
         ...(data.notes ? [['Notes', data.notes] as [string, string]] : []),
       ]} />
+      {hasMetalExchange && (
+        <div className="bg-gray-50 rounded-lg p-3">
+          <p className="text-xs font-semibold text-gray-500 mb-1">Old Metal Exchange</p>
+          {(data.old_gold_weight ?? 0) > 0 && <p>Gold: {data.old_gold_weight}g — {formatCurrency(data.old_gold_amount)}</p>}
+          {(data.old_silver_weight ?? 0) > 0 && <p>Silver: {data.old_silver_weight}g — {formatCurrency(data.old_silver_amount)}</p>}
+        </div>
+      )}
+      {cashPortion > 0.005 ? (
+        <InfoGrid items={[
+          ['Payment Mode', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode],
+          ['Cash Received', formatCurrency(cashPortion)],
+        ]} />
+      ) : hasMetalExchange ? (
+        <p className="text-xs text-gray-500 italic px-1">Fully settled via metal exchange — no cash received</p>
+      ) : (
+        <InfoGrid items={[['Payment Mode', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode]]} />
+      )}
     </div>
   )
 }

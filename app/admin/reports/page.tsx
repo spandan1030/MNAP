@@ -4,6 +4,17 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, PAYMENT_MODE_LABELS } from '@/lib/utils'
 
+function receiptSettlementLabel(r: any): string {
+  const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
+  if (metalTotal <= 0) return PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode
+  const cashPortion = r.amount - metalTotal
+  const parts: string[] = []
+  if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
+  if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
+  if (cashPortion > 0.005) parts.unshift(PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode)
+  return parts.join(' + ')
+}
+
 export default function ReportsPage() {
   const supabase = createClient()
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0])
@@ -46,7 +57,7 @@ export default function ReportsPage() {
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
     const allPayments = bills.flatMap((b: any) => b.sales_payments ?? [])
     const cashSales = allPayments.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
-    const cashReceipts = receipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
+    const cashReceipts = receipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0), 0)
     const cashExpenses = expenses.filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
     const cashOldGoldOut = oldGoldPurchases.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
     const cashDirectIn = directReceipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
@@ -186,14 +197,14 @@ export default function ReportsPage() {
       r.serial_number ?? '—',
       r.customer_name,
       r.repair_type ?? '—',
-      r.payment_mode.toUpperCase(),
+      receiptSettlementLabel(r),
       formatCurrency(r.amount),
       r.notes ?? '—',
     ])
     if (receiptRows.length > 0) {
       receiptRows.push(['', '', '', '', 'TOTAL', formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts), ''])
       autoTable(doc, {
-        startY: y, head: [['Type', 'Serial', 'Customer', 'Repair', 'Mode', 'Amount', 'Notes']],
+        startY: y, head: [['Type', 'Serial', 'Customer', 'Repair', 'Settlement', 'Amount', 'Notes']],
         body: receiptRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
       })
       y = (doc as any).lastAutoTable.finalY + 8
@@ -442,7 +453,7 @@ export default function ReportsPage() {
                   <th className="text-left p-2 font-medium">Serial No.</th>
                   <th className="text-left p-2 font-medium">Customer</th>
                   <th className="text-left p-2 font-medium">Repair Type</th>
-                  <th className="text-left p-2 font-medium">Mode</th>
+                  <th className="text-left p-2 font-medium">Settlement</th>
                   <th className="text-right p-2 font-medium">Amount</th>
                   <th className="text-left p-2 font-medium">Notes</th>
                 </tr></thead>
@@ -453,7 +464,7 @@ export default function ReportsPage() {
                       <td className="p-2">{r.serial_number ?? '—'}</td>
                       <td className="p-2">{r.customer_name}</td>
                       <td className="p-2">{r.repair_type ?? '—'}</td>
-                      <td className="p-2 uppercase">{r.payment_mode}</td>
+                      <td className="p-2">{receiptSettlementLabel(r)}</td>
                       <td className="p-2 text-right">{formatCurrency(r.amount)}</td>
                       <td className="p-2 text-gray-500">{r.notes ?? '—'}</td>
                     </tr>

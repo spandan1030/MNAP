@@ -5,6 +5,17 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
+function receiptSettlementLabel(r: any): string {
+  const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
+  if (metalTotal <= 0) return PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode
+  const cashPortion = r.amount - metalTotal
+  const parts: string[] = []
+  if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
+  if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
+  if (cashPortion > 0.005) parts.unshift(PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode)
+  return parts.join(' + ')
+}
+
 export default function ArchivalPage() {
   const supabase = createClient()
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -146,7 +157,7 @@ export default function ArchivalPage() {
           <Section title={`Money Receipts (Module B) — ${filtered(data.receipts).length} entries`}>
             {filtered(data.receipts).length === 0 ? <Empty /> : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse min-w-[700px]">
+                <table className="w-full text-xs border-collapse min-w-[900px]">
                   <thead><tr className="bg-gray-50 text-left">
                     <th className="p-2 font-medium">Type</th>
                     <th className="p-2 font-medium">Serial No.</th>
@@ -154,7 +165,8 @@ export default function ArchivalPage() {
                     <th className="p-2 font-medium">Repair Type</th>
                     <th className="p-2 font-medium">Weight</th>
                     <th className="p-2 font-medium text-right">Amount</th>
-                    <th className="p-2 font-medium">Payment</th>
+                    <th className="p-2 font-medium">Old Metal</th>
+                    <th className="p-2 font-medium">Settlement</th>
                     <th className="p-2 font-medium">Notes</th>
                     <th className="p-2 font-medium">Status</th>
                     <th className="p-2 font-medium">Time</th>
@@ -169,7 +181,12 @@ export default function ArchivalPage() {
                         <td className="p-2">{r.repair_type ?? '—'}</td>
                         <td className="p-2">{r.weight ? `${r.weight}g` : '—'}</td>
                         <td className="p-2 text-right font-medium">{formatCurrency(r.amount)}</td>
-                        <td className="p-2 uppercase">{r.payment_mode}</td>
+                        <td className="p-2">
+                          {(r.old_gold_weight ?? 0) > 0 && <div>Gold: {r.old_gold_weight}g / {formatCurrency(r.old_gold_amount)}</div>}
+                          {(r.old_silver_weight ?? 0) > 0 && <div>Silver: {r.old_silver_weight}g / {formatCurrency(r.old_silver_amount)}</div>}
+                          {!((r.old_gold_weight ?? 0) > 0) && !((r.old_silver_weight ?? 0) > 0) && '—'}
+                        </td>
+                        <td className="p-2">{receiptSettlementLabel(r)}</td>
                         <td className="p-2 text-gray-500">{r.notes ?? '—'}</td>
                         <td className="p-2"><StatusBadge status={r.status} /></td>
                         <td className="p-2 text-gray-400 whitespace-nowrap">{formatDateTime(r.submitted_at)}</td>
