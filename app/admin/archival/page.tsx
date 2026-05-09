@@ -72,7 +72,7 @@ export default function ArchivalPage() {
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
           <div className="flex gap-1 flex-wrap">
-            {['all', 'pending', 'approved', 'rejected', 'edited'].map(s => (
+            {['all', 'pending', 'approved', 'rejected'].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
                 className={`px-2.5 py-1 rounded-md text-xs font-medium capitalize transition-colors ${statusFilter === s ? 'bg-amber-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 {s}

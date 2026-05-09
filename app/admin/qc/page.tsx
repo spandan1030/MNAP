@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
-type FilterStatus = 'pending' | 'approved' | 'rejected' | 'edited' | 'all'
+type FilterStatus = 'pending' | 'approved' | 'rejected' | 'all'
 type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses' | 'old_gold' | 'direct' | 'payments' | 'approvals'
 
 interface AuditEntry { field_name: string; original_value: string; edited_value: string; edit_reason: string; edited_at: string }
@@ -147,7 +147,7 @@ export default function QCPage() {
     const { data: { user } } = await supabase.auth.getUser()
 
     const fields = EDITABLE_FIELDS[selected.type] ?? []
-    const updateObj: any = { status: 'edited' }
+    const updateObj: any = { status: 'approved' }
     const auditRows: any[] = []
 
     for (const field of fields) {
@@ -200,7 +200,7 @@ export default function QCPage() {
 
       <div className="flex flex-wrap gap-3 bg-white rounded-xl border border-gray-200 p-4">
         <FilterGroup label="Status" value={filterStatus} onChange={v => setFilterStatus(v as FilterStatus)}
-          options={['pending', 'approved', 'rejected', 'edited', 'all']} />
+          options={['pending', 'approved', 'rejected', 'all']} />
         <FilterGroup label="Module" value={filterModule} onChange={v => setFilterModule(v as FilterModule)}
           options={['all', 'sales', 'receipts', 'expenses', 'old_gold', 'direct', 'payments', 'approvals']}
           labels={{ old_gold: 'old gold' }} />

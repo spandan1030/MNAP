@@ -30,13 +30,13 @@ export default function ReportsPage() {
     if (!session) { setLoading(false); return }
 
     const [billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes, asRes] = await Promise.all([
-      supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*)').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
-      supabase.from('money_receipts').select('*').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
-      supabase.from('expenses').select('*').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
-      supabase.from('old_gold_purchases').select('*').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
-      supabase.from('direct_receipts').select('*').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
-      supabase.from('party_payments').select('*').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
-      supabase.from('approval_sales').select('*, approval_sale_items(*)').eq('day_session_id', session.id).in('status', ['approved', 'edited']),
+      supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*)').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('money_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('expenses').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('old_gold_purchases').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('direct_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('party_payments').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('approval_sales').select('*, approval_sale_items(*)').eq('day_session_id', session.id).eq('status', 'approved'),
     ])
 
     const bills = billsRes.data ?? []
