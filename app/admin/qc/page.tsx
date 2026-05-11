@@ -67,42 +67,25 @@ export default function QCPage() {
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
-    const { data: session } = await supabase.from('day_sessions').select('id').eq('date', today).single()
-    if (!session) { setLoading(false); return }
 
-    const statusFilter = filterStatus !== 'all' ? filterStatus : undefined
-    const applyFilter = (res: any) =>
-      statusFilter ? { data: (res.data ?? []).filter((x: any) => x.status === statusFilter) } : res
+    const q = (table: string) => {
+      let query = supabase
+        .from(table)
+        .select('*, profiles!submitted_by(name), day_sessions!inner(date)')
+        .eq('day_sessions.date', today)
+        .order('submitted_at', { ascending: false })
+      if (filterStatus !== 'all') query = query.eq('status', filterStatus)
+      return query
+    }
 
     const [b, r, e, og, dr, pp, as_] = await Promise.all([
-      filterModule === 'all' || filterModule === 'sales'
-        ? supabase.from('sales_bills').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
-      filterModule === 'all' || filterModule === 'receipts'
-        ? supabase.from('money_receipts').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
-      filterModule === 'all' || filterModule === 'expenses'
-        ? supabase.from('expenses').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
-      filterModule === 'all' || filterModule === 'old_gold'
-        ? supabase.from('old_gold_purchases').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
-      filterModule === 'all' || filterModule === 'direct'
-        ? supabase.from('direct_receipts').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
-      filterModule === 'all' || filterModule === 'payments'
-        ? supabase.from('party_payments').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
-      filterModule === 'all' || filterModule === 'approvals'
-        ? supabase.from('approval_sales').select('*, profiles!submitted_by(name)')
-            .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
-        : { data: [] },
+      filterModule === 'all' || filterModule === 'sales'     ? q('sales_bills')        : { data: [] },
+      filterModule === 'all' || filterModule === 'receipts'  ? q('money_receipts')     : { data: [] },
+      filterModule === 'all' || filterModule === 'expenses'  ? q('expenses')           : { data: [] },
+      filterModule === 'all' || filterModule === 'old_gold'  ? q('old_gold_purchases') : { data: [] },
+      filterModule === 'all' || filterModule === 'direct'    ? q('direct_receipts')    : { data: [] },
+      filterModule === 'all' || filterModule === 'payments'  ? q('party_payments')     : { data: [] },
+      filterModule === 'all' || filterModule === 'approvals' ? q('approval_sales')     : { data: [] },
     ])
 
     setBills(b.data ?? [])

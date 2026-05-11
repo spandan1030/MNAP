@@ -18,16 +18,24 @@ export default async function AdminDashboard() {
 
   if (session) {
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
+    const sid = session.id
 
-    const [salesRes, billsRes, receiptsRes, expensesRes, ogpRes, drRes, ppRes] = await Promise.all([
+    const [salesRes, billsRes, receiptsRes, expensesRes, ogpRes, drRes, ppRes,
+           pb, pr, pe, pog, pdr, ppp] = await Promise.all([
       supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
-        .eq('sales_bills.day_session_id', session.id).neq('sales_bills.status', 'rejected'),
-      supabase.from('sales_bills').select('total_amount').eq('day_session_id', session.id).neq('status', 'rejected'),
-      supabase.from('money_receipts').select('amount, payment_mode, old_gold_amount, old_silver_amount').eq('day_session_id', session.id).neq('status', 'rejected'),
-      supabase.from('expenses').select('amount, payment_type').eq('day_session_id', session.id).neq('status', 'rejected'),
-      supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
-      supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
-      supabase.from('party_payments').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
+        .eq('sales_bills.day_session_id', sid).neq('sales_bills.status', 'rejected'),
+      supabase.from('sales_bills').select('total_amount').eq('day_session_id', sid).neq('status', 'rejected'),
+      supabase.from('money_receipts').select('amount, payment_mode, old_gold_amount, old_silver_amount').eq('day_session_id', sid).neq('status', 'rejected'),
+      supabase.from('expenses').select('amount, payment_type').eq('day_session_id', sid).neq('status', 'rejected'),
+      supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', sid).neq('status', 'rejected'),
+      supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', sid).neq('status', 'rejected'),
+      supabase.from('party_payments').select('amount, payment_mode').eq('day_session_id', sid).neq('status', 'rejected'),
+      supabase.from('sales_bills').select('id', { count: 'exact', head: true }).eq('day_session_id', sid).eq('status', 'pending'),
+      supabase.from('money_receipts').select('id', { count: 'exact', head: true }).eq('day_session_id', sid).eq('status', 'pending'),
+      supabase.from('expenses').select('id', { count: 'exact', head: true }).eq('day_session_id', sid).eq('status', 'pending'),
+      supabase.from('old_gold_purchases').select('id', { count: 'exact', head: true }).eq('day_session_id', sid).eq('status', 'pending'),
+      supabase.from('direct_receipts').select('id', { count: 'exact', head: true }).eq('day_session_id', sid).eq('status', 'pending'),
+      supabase.from('party_payments').select('id', { count: 'exact', head: true }).eq('day_session_id', sid).eq('status', 'pending'),
     ])
 
     const cashIn = (salesRes.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
@@ -43,16 +51,7 @@ export default async function AdminDashboard() {
     todayReceipts = (receiptsRes.data ?? []).reduce((s: number, r: any) => s + r.amount, 0)
     todayDirectReceipts = (drRes.data ?? []).reduce((s: number, r: any) => s + r.amount, 0)
     todayPayments = (ppRes.data ?? []).reduce((s: number, p: any) => s + p.amount, 0)
-
-    const [b, r, e, og, dr, pp] = await Promise.all([
-      supabase.from('sales_bills').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
-      supabase.from('money_receipts').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
-      supabase.from('expenses').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
-      supabase.from('old_gold_purchases').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
-      supabase.from('direct_receipts').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
-      supabase.from('party_payments').select('id', { count: 'exact' }).eq('day_session_id', session.id).eq('status', 'pending'),
-    ])
-    pendingCount = (b.count ?? 0) + (r.count ?? 0) + (e.count ?? 0) + (og.count ?? 0) + (dr.count ?? 0) + (pp.count ?? 0)
+    pendingCount = (pb.count ?? 0) + (pr.count ?? 0) + (pe.count ?? 0) + (pog.count ?? 0) + (pdr.count ?? 0) + (ppp.count ?? 0)
   }
 
   return (
