@@ -161,47 +161,28 @@ export default function ReportsPage() {
 
     if (y > 250) { doc.addPage(); y = 15 }
 
-    // Section 2 — Sales Summary
-    heading('Section 2 — Sales Summary')
-    autoTable(doc, {
-      startY: y,
-      body: [
-        ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
-        ['Gold / Diamond Amount', pdfAmt(data.goldAmount)],
-        ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
-        ['Silver Amount', pdfAmt(data.silverAmount)],
-        ['Other / Misc Items', `${data.otherCount} items — ${pdfAmt(data.otherAmount)}`],
-        ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${pdfAmt(data.oldGoldAmount)}`],
-        ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${pdfAmt(data.oldSilverAmount)}`],
-      ],
-      styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
-    })
-    y = (doc as any).lastAutoTable.finalY + 8
-
-    if (y > 230) { doc.addPage(); y = 15 }
-
-    // Section 3 — Payment Breakdown
-    heading('Section 3 — Payment Mode Breakdown (Sales + Receipts)')
-    autoTable(doc, {
-      startY: y,
-      body: [
-        ['Cash', pdfAmt(data.paymentCash)],
-        ['Card', pdfAmt(data.paymentCard)],
-        ['UPI', pdfAmt(data.paymentUPI)],
-        ['PhonePe', pdfAmt(data.paymentPhonePe)],
-        ['Cheque', pdfAmt(data.paymentCheque)],
-        ['Customer Credit', pdfAmt(data.paymentCredit)],
-        ['Advance Adjusted', pdfAmt(data.paymentAdvance)],
-        ['SIP Adjusted', pdfAmt(data.paymentSIP)],
-      ],
-      styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
-    })
-    y = (doc as any).lastAutoTable.finalY + 8
+    // Section 2 — Approval / Other Party Sales
+    heading('Section 2 — Approval / Other Party Sales')
+    const asRows = data.approvalSales.flatMap((s: any) =>
+      (s.approval_sale_items ?? []).map((l: any, i: number) => [
+        i === 0 ? s.party_name : '',
+        i === 0 ? (s.transaction_type === 'sale' ? 'Party Sale' : 'Approval') : '',
+        l.item_name, l.metal_type, l.purity ?? '—', l.party,
+        l.weight ? `${l.weight}g` : '—', l.notes ?? '—',
+      ])
+    )
+    if (asRows.length > 0) {
+      autoTable(doc, {
+        startY: y, head: [['Party', 'Type', 'Item', 'Metal', 'Purity', 'Party (Stock)', 'Weight', 'Notes']],
+        body: asRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 8
+    } else { noRecords('No approval or party sale entries today.') }
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 4 — Money Receipts
-    heading('Section 4 — Money Receipts')
+    // Section 3 — Money Receipts
+    heading('Section 3 — Money Receipts')
     const receiptRows = data.receipts.map((r: any) => [
       r.receipt_type.replace('_', ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
       r.serial_number ?? '—',
@@ -222,8 +203,8 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 5 — Old Metal Purchases
-    heading('Section 5 — Old Metal Purchases')
+    // Section 4 — Old Metal Purchases
+    heading('Section 4 — Old Metal Purchases')
     const ogRows = data.oldGoldPurchases.map((p: any) => [
       p.customer_name, p.customer_phone ?? '—', p.metal_type, p.purity ?? '—',
       `${p.weight}g`, p.rate_per_gram ? `Rs.${p.rate_per_gram}` : '—',
@@ -242,8 +223,8 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 6 — Direct Receipts
-    heading('Section 6 — Direct Money Receipts')
+    // Section 5 — Direct Receipts
+    heading('Section 5 — Direct Money Receipts')
     const drRows = data.directReceipts.map((r: any) => [
       r.customer_name, r.customer_number ?? '—',
       pdfAmt(r.amount),
@@ -261,8 +242,48 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 7 — Party Payments
-    heading('Section 7 — Payments')
+    // Section 6 — Sales + Money Receipts Summary
+    heading('Section 6 — Sales + Money Receipts Summary')
+    autoTable(doc, {
+      startY: y,
+      body: [
+        ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
+        ['Gold / Diamond Amount', pdfAmt(data.goldAmount)],
+        ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
+        ['Silver Amount', pdfAmt(data.silverAmount)],
+        ['Other / Misc Items', `${data.otherCount} items — ${pdfAmt(data.otherAmount)}`],
+        ['Total Money Receipts', pdfAmt(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts)],
+        ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${pdfAmt(data.oldGoldAmount)}`],
+        ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${pdfAmt(data.oldSilverAmount)}`],
+      ],
+      styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
+    })
+    y = (doc as any).lastAutoTable.finalY + 8
+
+    if (y > 220) { doc.addPage(); y = 15 }
+
+    // Section 7 — Customer Payment Mode Breakdown
+    heading('Section 7 — Customer Payment Mode Breakdown')
+    autoTable(doc, {
+      startY: y,
+      body: [
+        ['Cash', pdfAmt(data.paymentCash)],
+        ['Card', pdfAmt(data.paymentCard)],
+        ['UPI', pdfAmt(data.paymentUPI)],
+        ['PhonePe', pdfAmt(data.paymentPhonePe)],
+        ['Cheque', pdfAmt(data.paymentCheque)],
+        ['Customer Credit', pdfAmt(data.paymentCredit)],
+        ['Advance Adjusted', pdfAmt(data.paymentAdvance)],
+        ['SIP Adjusted', pdfAmt(data.paymentSIP)],
+      ],
+      styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
+    })
+    y = (doc as any).lastAutoTable.finalY + 8
+
+    if (y > 220) { doc.addPage(); y = 15 }
+
+    // Section 8 — Payments
+    heading('Section 8 — Payments')
     const ppRows = data.partyPayments.map((p: any) => [
       p.party_name,
       pdfAmt(p.amount),
@@ -280,8 +301,8 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 8 — Expenses
-    heading('Section 8 — Expenses')
+    // Section 9 — Expenses
+    heading('Section 9 — Expenses')
     const expenseRows = data.expenses.map((e: any) => [
       e.description,
       e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
@@ -296,28 +317,6 @@ export default function ReportsPage() {
       })
       y = (doc as any).lastAutoTable.finalY + 8
     } else { noRecords('No expenses today.') }
-
-    if (y > 200) { doc.addPage(); y = 15 }
-
-    if (y > 220) { doc.addPage(); y = 15 }
-
-    // Section 9 — Approval / Other Party Sales
-    heading('Section 9 — Approval / Other Party Sales')
-    const asRows = data.approvalSales.flatMap((s: any) =>
-      (s.approval_sale_items ?? []).map((l: any, i: number) => [
-        i === 0 ? s.party_name : '',
-        i === 0 ? (s.transaction_type === 'sale' ? 'Party Sale' : 'Approval') : '',
-        l.item_name, l.metal_type, l.purity ?? '—', l.party,
-        l.weight ? `${l.weight}g` : '—', l.notes ?? '—',
-      ])
-    )
-    if (asRows.length > 0) {
-      autoTable(doc, {
-        startY: y, head: [['Party', 'Type', 'Item', 'Metal', 'Purity', 'Party (Stock)', 'Weight', 'Notes']],
-        body: asRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 8
-    } else { noRecords('No approval or party sale entries today.') }
 
     if (y > 200) { doc.addPage(); y = 15 }
 
@@ -455,35 +454,48 @@ export default function ReportsPage() {
             })}
           </ReportSection>
 
-          {/* Section 2 — Sales Summary */}
-          <ReportSection title="Section 2 — Sales Summary">
-            <SummaryTable rows={[
-              ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
-              ['Gold / Diamond Amount', formatCurrency(data.goldAmount)],
-              ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
-              ['Silver Amount', formatCurrency(data.silverAmount)],
-              ['Other / Misc Items', `${data.otherCount} items — ${formatCurrency(data.otherAmount)}`],
-              ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
-              ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
-            ]} />
+          {/* Section 2 — Approval / Other Party Sales */}
+          <ReportSection title="Section 2 — Approval / Other Party Sales">
+            {data.approvalSales.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">No approval or party sale entries today.</p>
+            ) : (
+              <div className="space-y-4">
+                {data.approvalSales.map((s: any) => (
+                  <div key={s.id} className="border border-gray-100 rounded-lg p-3">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs font-semibold uppercase text-amber-700">{s.transaction_type === 'sale' ? 'Party Sale' : 'Approval'}</span>
+                      <span className="text-sm font-medium text-gray-900">{s.party_name}</span>
+                    </div>
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-gray-50">
+                        <th className="text-left p-1.5 font-medium">Item</th>
+                        <th className="text-left p-1.5 font-medium">Metal</th>
+                        <th className="text-left p-1.5 font-medium">Purity</th>
+                        <th className="text-left p-1.5 font-medium">Party</th>
+                        <th className="text-right p-1.5 font-medium">Weight</th>
+                        <th className="text-left p-1.5 font-medium">Notes</th>
+                      </tr></thead>
+                      <tbody>
+                        {(s.approval_sale_items ?? []).map((l: any) => (
+                          <tr key={l.id} className="border-t border-gray-100">
+                            <td className="p-1.5">{l.item_name}</td>
+                            <td className="p-1.5 capitalize">{l.metal_type}</td>
+                            <td className="p-1.5">{l.purity ?? '—'}</td>
+                            <td className="p-1.5">{l.party}</td>
+                            <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
+                            <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            )}
           </ReportSection>
 
-          {/* Section 3 — Payment Breakdown */}
-          <ReportSection title="Section 3 — Payment Mode Breakdown (Sales + Receipts)">
-            <SummaryTable rows={[
-              ['Cash', formatCurrency(data.paymentCash)],
-              ['Card', formatCurrency(data.paymentCard)],
-              ['UPI', formatCurrency(data.paymentUPI)],
-              ['PhonePe', formatCurrency(data.paymentPhonePe)],
-              ['Cheque', formatCurrency(data.paymentCheque)],
-              ['Customer Credit (new)', formatCurrency(data.paymentCredit)],
-              ['Advance Adjusted', formatCurrency(data.paymentAdvance)],
-              ['SIP Adjusted', formatCurrency(data.paymentSIP)],
-            ]} />
-          </ReportSection>
-
-          {/* Section 4 — Money Receipts */}
-          <ReportSection title="Section 4 — Money Receipts">
+          {/* Section 3 — Money Receipts */}
+          <ReportSection title="Section 3 — Money Receipts">
             {data.receipts.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No money receipts today.</p>
             ) : (
@@ -519,8 +531,8 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 5 — Old Metal Purchases */}
-          <ReportSection title="Section 5 — Old Metal Purchases">
+          {/* Section 4 — Old Metal Purchases */}
+          <ReportSection title="Section 4 — Old Metal Purchases">
             {data.oldGoldPurchases.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No old gold purchases today.</p>
             ) : (
@@ -560,8 +572,8 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 6 — Direct Money Receipts */}
-          <ReportSection title="Section 6 — Direct Money Receipts">
+          {/* Section 5 — Direct Money Receipts */}
+          <ReportSection title="Section 5 — Direct Money Receipts">
             {data.directReceipts.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No direct receipts today.</p>
             ) : (
@@ -593,8 +605,36 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 7 — Party Payments */}
-          <ReportSection title="Section 7 — Payments">
+          {/* Section 6 — Sales + Money Receipts Summary */}
+          <ReportSection title="Section 6 — Sales + Money Receipts Summary">
+            <SummaryTable rows={[
+              ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
+              ['Gold / Diamond Amount', formatCurrency(data.goldAmount)],
+              ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
+              ['Silver Amount', formatCurrency(data.silverAmount)],
+              ['Other / Misc Items', `${data.otherCount} items — ${formatCurrency(data.otherAmount)}`],
+              ['Total Money Receipts', formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts)],
+              ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
+              ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
+            ]} />
+          </ReportSection>
+
+          {/* Section 7 — Customer Payment Mode Breakdown */}
+          <ReportSection title="Section 7 — Customer Payment Mode Breakdown">
+            <SummaryTable rows={[
+              ['Cash', formatCurrency(data.paymentCash)],
+              ['Card', formatCurrency(data.paymentCard)],
+              ['UPI', formatCurrency(data.paymentUPI)],
+              ['PhonePe', formatCurrency(data.paymentPhonePe)],
+              ['Cheque', formatCurrency(data.paymentCheque)],
+              ['Customer Credit (new)', formatCurrency(data.paymentCredit)],
+              ['Advance Adjusted', formatCurrency(data.paymentAdvance)],
+              ['SIP Adjusted', formatCurrency(data.paymentSIP)],
+            ]} />
+          </ReportSection>
+
+          {/* Section 8 — Payments */}
+          <ReportSection title="Section 8 — Payments">
             {data.partyPayments.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No payments today.</p>
             ) : (
@@ -624,8 +664,8 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 8 — Expenses */}
-          <ReportSection title="Section 8 — Expenses">
+          {/* Section 9 — Expenses */}
+          <ReportSection title="Section 9 — Expenses">
             {data.expenses.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No expenses today.</p>
             ) : (
@@ -655,47 +695,7 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 9 — Approval / Other Party Sales */}
-          <ReportSection title="Section 9 — Approval / Other Party Sales">
-            {data.approvalSales.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-2">No approval or party sale entries today.</p>
-            ) : (
-              <div className="space-y-4">
-                {data.approvalSales.map((s: any) => (
-                  <div key={s.id} className="border border-gray-100 rounded-lg p-3">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xs font-semibold uppercase text-amber-700">{s.transaction_type === 'sale' ? 'Party Sale' : 'Approval'}</span>
-                      <span className="text-sm font-medium text-gray-900">{s.party_name}</span>
-                    </div>
-                    <table className="w-full text-xs border-collapse">
-                      <thead><tr className="bg-gray-50">
-                        <th className="text-left p-1.5 font-medium">Item</th>
-                        <th className="text-left p-1.5 font-medium">Metal</th>
-                        <th className="text-left p-1.5 font-medium">Purity</th>
-                        <th className="text-left p-1.5 font-medium">Party</th>
-                        <th className="text-right p-1.5 font-medium">Weight</th>
-                        <th className="text-left p-1.5 font-medium">Notes</th>
-                      </tr></thead>
-                      <tbody>
-                        {(s.approval_sale_items ?? []).map((l: any) => (
-                          <tr key={l.id} className="border-t border-gray-100">
-                            <td className="p-1.5">{l.item_name}</td>
-                            <td className="p-1.5 capitalize">{l.metal_type}</td>
-                            <td className="p-1.5">{l.purity ?? '—'}</td>
-                            <td className="p-1.5">{l.party}</td>
-                            <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
-                            <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ReportSection>
-
-          {/* Section 10 — Cash Register */}
+          {/* Section 10 — Cash Register Summary */}
           <ReportSection title="Section 10 — Cash Register Summary">
             <SummaryTable rows={[
               ['Register A — Opening Balance', formatCurrency(data.session.register_a_opening)],
