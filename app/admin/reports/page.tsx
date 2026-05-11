@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, PAYMENT_MODE_LABELS } from '@/lib/utils'
 
@@ -21,15 +21,18 @@ export default function ReportsPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [dailyRates, setDailyRates] = useState<any>(null)
+  const [checkedItemId, setCheckedItemId] = useState<string | null>(null)
 
   async function loadReport() {
     setLoading(true)
     setData(null)
+    setCheckedItemId(null)
 
     const { data: session } = await supabase.from('day_sessions').select('*').eq('date', reportDate).single()
     if (!session) { setLoading(false); return }
 
-    const [billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes, asRes] = await Promise.all([
+    const [billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes, asRes, ratesRes] = await Promise.all([
       supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*)').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('money_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('expenses').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
@@ -37,6 +40,7 @@ export default function ReportsPage() {
       supabase.from('direct_receipts').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('party_payments').select('*').eq('day_session_id', session.id).eq('status', 'approved'),
       supabase.from('approval_sales').select('*, approval_sale_items(*)').eq('day_session_id', session.id).eq('status', 'approved'),
+      supabase.from('daily_rates').select('*').eq('date', reportDate).maybeSingle(),
     ])
 
     const bills = billsRes.data ?? []
@@ -46,6 +50,7 @@ export default function ReportsPage() {
     const directReceipts = drRes.data ?? []
     const partyPayments = ppRes.data ?? []
     const approvalSales = asRes.data ?? []
+    setDailyRates(ratesRes.data ?? null)
 
     const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? [])
     const goldItems = allLineItems.filter((l: any) => l.metal_type === 'gold')
@@ -430,7 +435,10 @@ export default function ReportsPage() {
               if (!metalItems.length) return null
               return (
                 <div key={metal} className="mb-4">
-                  <p className="text-xs font-semibold uppercase text-amber-700 mb-2 capitalize">{metal}</p>
+                  <p className="text-xs font-semibold uppercase text-amber-700 mb-2 capitalize">
+                    {metal}
+                    {metal !== 'other' && <span className="ml-1.5 text-gray-400 font-normal normal-case">· tap a row to verify amount</span>}
+                  </p>
                   <table className="w-full text-xs border-collapse">
                     <thead>
                       <tr className={metalItems.some((l: any) => l.order_in) ? 'bg-sky-100' : 'bg-gray-50'}>
@@ -445,21 +453,41 @@ export default function ReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {metalItems.map((item: any, i: number) => (
-                        <tr key={`${item.id}-${i}`} className={item.order_in ? 'border-t border-sky-300 bg-sky-100 border-l-4 border-l-sky-400' : 'border-t border-gray-100'}>
-                          <td className="p-2">{item.customer_name}</td>
-                          <td className="p-2">
-                            {item.item_name}
-                            {item.order_in && <span className="ml-1.5 text-[10px] font-semibold text-sky-700 bg-sky-200 border border-sky-300 px-1.5 py-0.5 rounded-full">Order In</span>}
-                          </td>
-                          <td className="p-2">{item.purity ?? '—'}</td>
-                          <td className="p-2">{item.party ?? '—'}</td>
-                          <td className="p-2 text-right">{item.weight ? `${item.weight}g` : '—'}</td>
-                          <td className="p-2 text-right">{formatCurrency(item.amount)}</td>
-                          <td className="p-2 text-right">{item.isFirstInBill && item.old_gold_weight ? `${item.old_gold_weight}g` : '—'}</td>
-                          <td className="p-2 text-right">{item.isFirstInBill && item.old_silver_weight ? `${item.old_silver_weight}g` : '—'}</td>
-                        </tr>
-                      ))}
+                      {metalItems.map((item: any, i: number) => {
+                        const isOpen = checkedItemId === item.id
+                        const canCheck = item.metal_type !== 'other' && item.weight
+                        return (
+                          <Fragment key={`${item.id}-${i}`}>
+                            <tr
+                              onClick={() => canCheck && setCheckedItemId(isOpen ? null : item.id)}
+                              className={`transition-colors
+                                ${item.order_in ? 'border-t border-sky-300 bg-sky-100 border-l-4 border-l-sky-400' : 'border-t border-gray-100'}
+                                ${canCheck && !item.order_in ? 'cursor-pointer hover:bg-amber-50' : ''}
+                                ${canCheck && item.order_in ? 'cursor-pointer hover:bg-sky-200' : ''}
+                                ${isOpen && !item.order_in ? 'bg-amber-50' : ''}`}
+                            >
+                              <td className="p-2">{item.customer_name}</td>
+                              <td className="p-2">
+                                {item.item_name}
+                                {item.order_in && <span className="ml-1.5 text-[10px] font-semibold text-sky-700 bg-sky-200 border border-sky-300 px-1.5 py-0.5 rounded-full">Order In</span>}
+                              </td>
+                              <td className="p-2">{item.purity ?? '—'}</td>
+                              <td className="p-2">{item.party ?? '—'}</td>
+                              <td className="p-2 text-right">{item.weight ? `${item.weight}g` : '—'}</td>
+                              <td className="p-2 text-right">{formatCurrency(item.amount)}</td>
+                              <td className="p-2 text-right">{item.isFirstInBill && item.old_gold_weight ? `${item.old_gold_weight}g` : '—'}</td>
+                              <td className="p-2 text-right">{item.isFirstInBill && item.old_silver_weight ? `${item.old_silver_weight}g` : '—'}</td>
+                            </tr>
+                            {isOpen && (
+                              <tr>
+                                <td colSpan={8} className="px-2 pb-2">
+                                  <RateCheckPanel item={item} rates={dailyRates} onClose={() => setCheckedItemId(null)} />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -746,6 +774,63 @@ export default function ReportsPage() {
             </div>
           </ReportSection>
         </div>
+      )}
+    </div>
+  )
+}
+
+function getRateForItem(item: any, rates: any): { rate: number; label: string } | null {
+  if (!rates || !item.weight) return null
+  if (item.metal_type === 'silver') return rates.rate_silver ? { rate: rates.rate_silver, label: 'Silver' } : null
+  if (item.metal_type === 'gold') {
+    if (item.purity === '24K' && rates.rate_24kt) return { rate: rates.rate_24kt, label: '24 KT' }
+    if (item.purity === '22K' && rates.rate_22kt) return { rate: rates.rate_22kt, label: '22 KT' }
+    if (item.purity === '18K' && rates.rate_18kt) return { rate: rates.rate_18kt, label: '18 KT' }
+  }
+  return null
+}
+
+function RateCheckPanel({ item, rates, onClose }: { item: any; rates: any; onClose: () => void }) {
+  const rateInfo = getRateForItem(item, rates)
+  const weight = item.weight ?? 0
+  const billedAmount = item.amount ?? 0
+  const metalValue = rateInfo ? rateInfo.rate * weight : null
+  const makingPct = metalValue && metalValue > 0 && billedAmount > 0
+    ? ((billedAmount / (metalValue * 1.03)) - 1) * 100
+    : null
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs space-y-1.5 mt-1 mb-1">
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-semibold text-amber-800 text-[11px] uppercase tracking-wide">Rate Check — {item.item_name}</span>
+        <button onClick={onClose} className="text-amber-400 hover:text-amber-700 font-bold text-sm leading-none">×</button>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+        <span className="text-gray-500">Weight</span>
+        <span className="font-medium text-gray-900">{weight}g</span>
+
+        <span className="text-gray-500">Rate ({rateInfo ? rateInfo.label : (item.purity ?? item.metal_type)})</span>
+        <span className="font-medium text-gray-900">
+          {rateInfo
+            ? `₹${rateInfo.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}/g`
+            : <span className="text-red-500">No rate saved for this date</span>}
+        </span>
+
+        {metalValue != null && <>
+          <span className="text-gray-500">Metal value</span>
+          <span className="font-medium text-gray-900">{formatCurrency(metalValue)}</span>
+        </>}
+
+        <span className="text-gray-500">Billed amount</span>
+        <span className="font-medium text-gray-900">{formatCurrency(billedAmount)}</span>
+
+        {makingPct != null && <>
+          <span className="text-gray-500">Making charge (back-calc)</span>
+          <span className="font-semibold text-amber-700">{makingPct.toFixed(2)}%</span>
+        </>}
+      </div>
+      {!rateInfo && rates && item.metal_type !== 'other' && (
+        <p className="text-gray-400 italic pt-1">No {item.purity ?? item.metal_type} rate saved for this date.</p>
       )}
     </div>
   )
