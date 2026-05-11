@@ -432,21 +432,26 @@ export default function ReportsPage() {
                 <div key={metal} className="mb-4">
                   <p className="text-xs font-semibold uppercase text-amber-700 mb-2 capitalize">{metal}</p>
                   <table className="w-full text-xs border-collapse">
-                    <thead><tr className="bg-gray-50">
-                      <th className="text-left p-2 font-medium">Customer</th>
-                      <th className="text-left p-2 font-medium">Item</th>
-                      <th className="text-left p-2 font-medium">Purity</th>
-                      <th className="text-left p-2 font-medium">Party</th>
-                      <th className="text-right p-2 font-medium">Weight</th>
-                      <th className="text-right p-2 font-medium">Amount</th>
-                      <th className="text-right p-2 font-medium">Old Gold</th>
-                      <th className="text-right p-2 font-medium">Old Silver</th>
-                    </tr></thead>
+                    <thead>
+                      <tr className={metalItems.some((l: any) => l.order_in) ? 'bg-sky-100' : 'bg-gray-50'}>
+                        <th className="text-left p-2 font-medium">Customer</th>
+                        <th className="text-left p-2 font-medium">Item</th>
+                        <th className="text-left p-2 font-medium">Purity</th>
+                        <th className="text-left p-2 font-medium">Party</th>
+                        <th className="text-right p-2 font-medium">Weight</th>
+                        <th className="text-right p-2 font-medium">Amount</th>
+                        <th className="text-right p-2 font-medium">Old Gold</th>
+                        <th className="text-right p-2 font-medium">Old Silver</th>
+                      </tr>
+                    </thead>
                     <tbody>
                       {metalItems.map((item: any, i: number) => (
-                        <tr key={`${item.id}-${i}`} className={item.order_in ? 'border-t border-sky-200 bg-sky-50' : 'border-t border-gray-100'}>
+                        <tr key={`${item.id}-${i}`} className={item.order_in ? 'border-t border-sky-300 bg-sky-100 border-l-4 border-l-sky-400' : 'border-t border-gray-100'}>
                           <td className="p-2">{item.customer_name}</td>
-                          <td className="p-2">{item.item_name}</td>
+                          <td className="p-2">
+                            {item.item_name}
+                            {item.order_in && <span className="ml-1.5 text-[10px] font-semibold text-sky-700 bg-sky-200 border border-sky-300 px-1.5 py-0.5 rounded-full">Order In</span>}
+                          </td>
                           <td className="p-2">{item.purity ?? '—'}</td>
                           <td className="p-2">{item.party ?? '—'}</td>
                           <td className="p-2 text-right">{item.weight ? `${item.weight}g` : '—'}</td>
