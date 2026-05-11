@@ -42,18 +42,22 @@ export default function ArchivalPage() {
   async function loadData() {
     setLoading(true)
     setData(null)
-    const { data: session } = await supabase.from('day_sessions').select('id, date').eq('date', date).single()
-    if (!session) { setLoading(false); return }
 
-    const [bills, receipts, expenses, ogPurchases, drReceipts, partyPayments, approvalSales] = await Promise.all([
-      supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
-      supabase.from('money_receipts').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
-      supabase.from('expenses').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
-      supabase.from('old_gold_purchases').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
-      supabase.from('direct_receipts').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
-      supabase.from('party_payments').select('*, profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
-      supabase.from('approval_sales').select('*, approval_sale_items(*), profiles!submitted_by(name)').eq('day_session_id', session.id).order('submitted_at'),
+    const byDate = (table: string, sel: string) =>
+      supabase.from(table).select(sel).eq('day_sessions.date', date).order('submitted_at')
+
+    const [sessionRes, bills, receipts, expenses, ogPurchases, drReceipts, partyPayments, approvalSales] = await Promise.all([
+      supabase.from('day_sessions').select('id').eq('date', date).single(),
+      byDate('sales_bills', '*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('money_receipts', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('expenses', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('old_gold_purchases', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('direct_receipts', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('party_payments', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('approval_sales', '*, approval_sale_items(*), profiles!submitted_by(name), day_sessions!inner(id)'),
     ])
+
+    if (!sessionRes.data) { setLoading(false); return }
 
     setData({
       bills: bills.data ?? [],
