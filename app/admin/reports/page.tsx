@@ -112,6 +112,7 @@ export default function ReportsPage() {
     const { default: autoTable } = await import('jspdf-autotable')
 
     const doc = new jsPDF()
+    const pdfAmt = (n: number) => 'Rs.' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     const date = formatDate(reportDate)
     let y = 15
 
@@ -138,7 +139,7 @@ export default function ReportsPage() {
       (b.sales_line_items ?? []).map((l: any, i: number) => [
         i === 0 ? b.customer_name : '', l.order_in ? `★ ${l.item_name}` : l.item_name,
         l.metal_type, l.purity ?? '—', l.party ?? '—',
-        l.weight ? `${l.weight}g` : '—', `₹${l.amount.toFixed(2)}`,
+        l.weight ? `${l.weight}g` : '—', pdfAmt(l.amount),
         i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
         i === 0 && b.old_silver_weight ? `${b.old_silver_weight}g` : '—',
       ])
@@ -166,12 +167,12 @@ export default function ReportsPage() {
       startY: y,
       body: [
         ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
-        ['Gold / Diamond Amount', formatCurrency(data.goldAmount)],
+        ['Gold / Diamond Amount', pdfAmt(data.goldAmount)],
         ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
-        ['Silver Amount', formatCurrency(data.silverAmount)],
-        ['Other / Misc Items', `${data.otherCount} items — ${formatCurrency(data.otherAmount)}`],
-        ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
-        ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
+        ['Silver Amount', pdfAmt(data.silverAmount)],
+        ['Other / Misc Items', `${data.otherCount} items — ${pdfAmt(data.otherAmount)}`],
+        ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${pdfAmt(data.oldGoldAmount)}`],
+        ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${pdfAmt(data.oldSilverAmount)}`],
       ],
       styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
     })
@@ -184,14 +185,14 @@ export default function ReportsPage() {
     autoTable(doc, {
       startY: y,
       body: [
-        ['Cash', formatCurrency(data.paymentCash)],
-        ['Card', formatCurrency(data.paymentCard)],
-        ['UPI', formatCurrency(data.paymentUPI)],
-        ['PhonePe', formatCurrency(data.paymentPhonePe)],
-        ['Cheque', formatCurrency(data.paymentCheque)],
-        ['Customer Credit', formatCurrency(data.paymentCredit)],
-        ['Advance Adjusted', formatCurrency(data.paymentAdvance)],
-        ['SIP Adjusted', formatCurrency(data.paymentSIP)],
+        ['Cash', pdfAmt(data.paymentCash)],
+        ['Card', pdfAmt(data.paymentCard)],
+        ['UPI', pdfAmt(data.paymentUPI)],
+        ['PhonePe', pdfAmt(data.paymentPhonePe)],
+        ['Cheque', pdfAmt(data.paymentCheque)],
+        ['Customer Credit', pdfAmt(data.paymentCredit)],
+        ['Advance Adjusted', pdfAmt(data.paymentAdvance)],
+        ['SIP Adjusted', pdfAmt(data.paymentSIP)],
       ],
       styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
     })
@@ -207,11 +208,11 @@ export default function ReportsPage() {
       r.customer_name,
       r.repair_type ?? '—',
       receiptSettlementLabel(r),
-      formatCurrency(r.amount),
+      pdfAmt(r.amount),
       r.notes ?? '—',
     ])
     if (receiptRows.length > 0) {
-      receiptRows.push(['', '', '', '', 'TOTAL', formatCurrency(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts), ''])
+      receiptRows.push(['', '', '', '', 'TOTAL', pdfAmt(data.totalAdvanceReceipts + data.totalSIPReceipts + data.totalCreditReceipts + data.totalRepairReceipts), ''])
       autoTable(doc, {
         startY: y, head: [['Type', 'Serial', 'Customer', 'Repair', 'Settlement', 'Amount', 'Notes']],
         body: receiptRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
@@ -225,13 +226,13 @@ export default function ReportsPage() {
     heading('Section 5 — Old Metal Purchases')
     const ogRows = data.oldGoldPurchases.map((p: any) => [
       p.customer_name, p.customer_phone ?? '—', p.metal_type, p.purity ?? '—',
-      `${p.weight}g`, p.rate_per_gram ? `₹${p.rate_per_gram}` : '—',
-      formatCurrency(p.total_amount),
+      `${p.weight}g`, p.rate_per_gram ? `Rs.${p.rate_per_gram}` : '—',
+      pdfAmt(p.total_amount),
       p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
       p.notes ?? '—',
     ])
     if (ogRows.length > 0) {
-      ogRows.push(['', '', '', '', '', 'TOTAL', formatCurrency(data.totalOldGoldPurchases), '', ''])
+      ogRows.push(['', '', '', '', '', 'TOTAL', pdfAmt(data.totalOldGoldPurchases), '', ''])
       autoTable(doc, {
         startY: y, head: [['Customer', 'Phone', 'Metal', 'Purity', 'Weight', 'Rate/g', 'Amount', 'Payment', 'Notes']],
         body: ogRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
@@ -245,12 +246,12 @@ export default function ReportsPage() {
     heading('Section 6 — Direct Money Receipts')
     const drRows = data.directReceipts.map((r: any) => [
       r.customer_name, r.customer_number ?? '—',
-      formatCurrency(r.amount),
+      pdfAmt(r.amount),
       PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode,
       r.notes ?? '—',
     ])
     if (drRows.length > 0) {
-      drRows.push(['', 'TOTAL', formatCurrency(data.totalDirectReceipts), '', ''])
+      drRows.push(['', 'TOTAL', pdfAmt(data.totalDirectReceipts), '', ''])
       autoTable(doc, {
         startY: y, head: [['Customer', 'Phone / Ref', 'Amount', 'Payment', 'Notes']],
         body: drRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
@@ -264,12 +265,12 @@ export default function ReportsPage() {
     heading('Section 7 — Payments')
     const ppRows = data.partyPayments.map((p: any) => [
       p.party_name,
-      formatCurrency(p.amount),
+      pdfAmt(p.amount),
       p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
       p.notes ?? '—',
     ])
     if (ppRows.length > 0) {
-      ppRows.push(['TOTAL', formatCurrency(data.totalPartyPayments), '', ''])
+      ppRows.push(['TOTAL', pdfAmt(data.totalPartyPayments), '', ''])
       autoTable(doc, {
         startY: y, head: [['Party', 'Amount', 'Payment', 'Notes']],
         body: ppRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
@@ -284,11 +285,11 @@ export default function ReportsPage() {
     const expenseRows = data.expenses.map((e: any) => [
       e.description,
       e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
-      formatCurrency(e.amount),
+      pdfAmt(e.amount),
       e.notes ?? '—',
     ])
     if (expenseRows.length > 0) {
-      expenseRows.push(['', 'TOTAL', formatCurrency(data.totalExpenses), ''])
+      expenseRows.push(['', 'TOTAL', pdfAmt(data.totalExpenses), ''])
       autoTable(doc, {
         startY: y, head: [['Description', 'Payment Type', 'Amount', 'Notes']],
         body: expenseRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
@@ -325,20 +326,20 @@ export default function ReportsPage() {
     autoTable(doc, {
       startY: y,
       body: [
-        ['Register A — Opening', formatCurrency(data.session.register_a_opening)],
-        ['Register B — Opening', formatCurrency(data.session.register_b_opening)],
-        ['Combined Opening', formatCurrency(data.opening)],
-        ['Cash from Sales', formatCurrency(data.cashSales)],
-        ['Cash from Money Receipts', formatCurrency(data.cashReceipts)],
-        ['Cash from Direct Receipts', formatCurrency(data.cashDirectIn)],
-        ['Cash Expenses', `− ${formatCurrency(data.cashExpenses)}`],
-        ['Cash Old Metal Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
-        ['Cash Payments to Parties', `− ${formatCurrency(data.cashPartyPayOut)}`],
-        ['Expected Cash In Hand', formatCurrency(data.expectedCash)],
-        ['Register A — Closing', formatCurrency(data.session.register_a_closing ?? 0)],
-        ['Register B — Closing', formatCurrency(data.session.register_b_closing ?? 0)],
-        ['Actual Closing (A+B)', formatCurrency(data.actualClosing)],
-        ['Variance', `${data.variance >= 0 ? '+' : ''}${formatCurrency(data.variance)}`],
+        ['Register A — Opening', pdfAmt(data.session.register_a_opening)],
+        ['Register B — Opening', pdfAmt(data.session.register_b_opening)],
+        ['Combined Opening', pdfAmt(data.opening)],
+        ['Cash from Sales', pdfAmt(data.cashSales)],
+        ['Cash from Money Receipts', pdfAmt(data.cashReceipts)],
+        ['Cash from Direct Receipts', pdfAmt(data.cashDirectIn)],
+        ['Cash Expenses', `- ${pdfAmt(data.cashExpenses)}`],
+        ['Cash Old Metal Purchases', `- ${pdfAmt(data.cashOldGoldOut)}`],
+        ['Cash Payments to Parties', `- ${pdfAmt(data.cashPartyPayOut)}`],
+        ['Expected Cash In Hand', pdfAmt(data.expectedCash)],
+        ['Register A — Closing', pdfAmt(data.session.register_a_closing ?? 0)],
+        ['Register B — Closing', pdfAmt(data.session.register_b_closing ?? 0)],
+        ['Actual Closing (A+B)', pdfAmt(data.actualClosing)],
+        ['Variance', `${data.variance >= 0 ? '+' : '-'}${pdfAmt(Math.abs(data.variance))}`],
       ],
       styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
     })
@@ -402,7 +403,7 @@ export default function ReportsPage() {
             {data.bills.some((b: any) => (b.sales_line_items ?? []).some((l: any) => l.order_in)) && (
               <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
                 <span className="inline-block w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 flex-shrink-0" />
-                <span>Sky blue — item marked <strong>Order In</strong>: must be updated in Order Stock</span>
+                <span>Items marked <strong>Order In</strong> must be updated in Order Stock</span>
               </div>
             )}
             {['gold', 'silver', 'other'].map(metal => {

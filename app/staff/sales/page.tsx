@@ -194,7 +194,7 @@ export default function SalesPage() {
           {/* Legend */}
           <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
             <span className="inline-block w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 flex-shrink-0" />
-            <span>Sky blue — item marked <strong>Order In</strong>: must be updated in Order Stock</span>
+            <span>Items marked <strong>Order In</strong> must be updated in Order Stock</span>
           </div>
           <div className="space-y-4">
             {lineItems.map((l, i) => (
