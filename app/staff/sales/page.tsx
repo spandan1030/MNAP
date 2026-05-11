@@ -19,6 +19,7 @@ interface LineItem {
   purity: string
   party: string        // 'MNAP' or 'custom'
   party_custom: string
+  order_in: boolean
 }
 
 interface Payment {
@@ -32,6 +33,7 @@ const defaultLine = (): LineItem => ({
   item_name: '', weight: '', amount: '',
   metal_type: 'gold', purity: '22K',
   party: 'MNAP', party_custom: '',
+  order_in: false,
 })
 
 const defaultPayment = (): Payment => ({
@@ -143,6 +145,7 @@ export default function SalesPage() {
           metal_type: l.metal_type,
           purity: l.purity || null,
           party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
+          order_in: l.order_in,
         }))
       ),
       supabase.from('sales_payments').insert(
@@ -188,9 +191,21 @@ export default function SalesPage() {
 
         {/* Line Items */}
         <Section title="Line Items">
+          {/* Legend */}
+          <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+            <span className="inline-block w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 flex-shrink-0" />
+            <span>Sky blue — item marked <strong>Order In</strong>: must be updated in Order Stock</span>
+          </div>
           <div className="space-y-4">
             {lineItems.map((l, i) => (
-              <div key={i} className="border border-gray-100 rounded-lg p-3 space-y-2 bg-gray-50">
+              <div key={i} className={`border rounded-lg p-3 space-y-2 transition-colors ${l.order_in ? 'bg-sky-50 border-sky-300' : 'bg-gray-50 border-gray-100'}`}>
+                {/* Row 0: Order In toggle */}
+                <div className="flex justify-end">
+                  <button type="button" onClick={() => setLineItems(prev => prev.map((item, idx) => idx === i ? { ...item, order_in: !item.order_in } : item))}
+                    className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-colors ${l.order_in ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-gray-300 text-gray-500 hover:border-sky-400 hover:text-sky-600'}`}>
+                    Order In
+                  </button>
+                </div>
                 {/* Row 1: metal, purity, party */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-3">

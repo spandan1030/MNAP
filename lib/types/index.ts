@@ -67,6 +67,7 @@ export interface SalesLineItem {
   metal_type: MetalType
   purity: string | null
   party: string
+  order_in: boolean
 }
 
 export interface SalesPayment {
