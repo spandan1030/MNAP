@@ -61,6 +61,8 @@ export default function QCPage() {
   const [message, setMessage] = useState('')
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [dailyRates, setDailyRates] = useState<any>(null)
+  const [selectedDetail, setSelectedDetail] = useState<any>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
@@ -74,7 +76,7 @@ export default function QCPage() {
 
     const [b, r, e, og, dr, pp, as_] = await Promise.all([
       filterModule === 'all' || filterModule === 'sales'
-        ? supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name)')
+        ? supabase.from('sales_bills').select('*, profiles!submitted_by(name)')
             .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
       filterModule === 'all' || filterModule === 'receipts'
@@ -98,7 +100,7 @@ export default function QCPage() {
             .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
       filterModule === 'all' || filterModule === 'approvals'
-        ? supabase.from('approval_sales').select('*, approval_sale_items(*), profiles!submitted_by(name)')
+        ? supabase.from('approval_sales').select('*, profiles!submitted_by(name)')
             .eq('day_session_id', session.id).order('submitted_at', { ascending: false }).then(applyFilter)
         : { data: [] },
     ])
@@ -126,7 +128,26 @@ export default function QCPage() {
     setDailyRates(data ?? null)
   }
 
-  function closeModal() { setSelected(null); setEditMode(false); setEditData(null); setEditReason(''); setDailyRates(null) }
+  async function loadEntryDetail(type: string, id: string) {
+    setLoadingDetail(true)
+    setSelectedDetail(null)
+    if (type === 'sales') {
+      const [li, sp] = await Promise.all([
+        supabase.from('sales_line_items').select('*').eq('bill_id', id),
+        supabase.from('sales_payments').select('*').eq('bill_id', id),
+      ])
+      setSelectedDetail({ sales_line_items: li.data ?? [], sales_payments: sp.data ?? [] })
+    } else if (type === 'approval_sale') {
+      const { data } = await supabase.from('approval_sale_items').select('*').eq('sale_id', id)
+      setSelectedDetail({ approval_sale_items: data ?? [] })
+    }
+    setLoadingDetail(false)
+  }
+
+  function closeModal() {
+    setSelected(null); setEditMode(false); setEditData(null); setEditReason('')
+    setDailyRates(null); setSelectedDetail(null); setLoadingDetail(false)
+  }
 
   async function handleApprove(type: string, id: string) {
     setActionLoading(true)
@@ -229,9 +250,11 @@ export default function QCPage() {
             <EntryRow key={data.id} type={type} data={data}
               onOpen={() => {
                 setSelected({ type, data })
+                setSelectedDetail(null)
                 setRejectReason(''); setEditReason(''); setMessage('')
                 setEditMode(false); setEditData(null)
                 loadAuditLog(data.id)
+                loadEntryDetail(type, data.id)
                 if (type === 'sales') fetchDailyRates()
               }} />
           ))}
@@ -251,6 +274,9 @@ export default function QCPage() {
             </div>
 
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              {loadingDetail && (
+                <div className="text-xs text-gray-400 animate-pulse">Loading entry details…</div>
+              )}
               <div className="flex items-center gap-2">
                 <StatusBadge status={selected.data.status} />
                 <span className="text-xs text-gray-400">{formatDateTime(selected.data.submitted_at)}</span>
@@ -290,13 +316,13 @@ export default function QCPage() {
                 </div>
               ) : (
                 <>
-                  {selected.type === 'sales'        && <SalesBillDetail     data={selected.data} dailyRates={dailyRates} />}
+                  {selected.type === 'sales'        && <SalesBillDetail     data={{ ...selected.data, ...selectedDetail }} dailyRates={dailyRates} />}
                   {selected.type === 'receipt'      && <ReceiptDetail       data={selected.data} />}
                   {selected.type === 'expense'      && <ExpenseDetail       data={selected.data} />}
                   {selected.type === 'old_gold'     && <OldGoldDetail       data={selected.data} />}
                   {selected.type === 'direct'       && <DirectReceiptDetail data={selected.data} />}
                   {selected.type === 'payment'      && <PartyPaymentDetail  data={selected.data} />}
-                  {selected.type === 'approval_sale'&& <ApprovalSaleDetail  data={selected.data} />}
+                  {selected.type === 'approval_sale'&& <ApprovalSaleDetail  data={{ ...selected.data, ...selectedDetail }} />}
 
                   {auditLog.length > 0 && (
                     <div className="border-t border-gray-100 pt-3">
