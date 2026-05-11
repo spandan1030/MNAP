@@ -170,7 +170,7 @@ export interface ApprovalSale {
   id: string
   day_session_id: string
   party_name: string
-  transaction_type: 'sale' | 'approval'
+  transaction_type: 'sale' | 'approval' | 'approval_return' | 'stock_in'
   status: EntryStatus
   submitted_by: string
   submitted_at: string

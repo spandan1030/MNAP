@@ -161,22 +161,30 @@ export default function ReportsPage() {
 
     if (y > 250) { doc.addPage(); y = 15 }
 
-    // Section 2 — Approval / Other Party Sales
-    heading('Section 2 — Approval / Other Party Sales')
+    // Section 2 — Approval / Other Party Sales / Stock In
+    heading('Section 2 — Approval / Other Party Sales / Stock In')
+    const txLabel = (t: string) => t === 'sale' ? 'Party Sale' : t === 'approval' ? 'Approval' : t === 'approval_return' ? 'Approval Return *' : 'Stock In *'
     const asRows = data.approvalSales.flatMap((s: any) =>
       (s.approval_sale_items ?? []).map((l: any, i: number) => [
         i === 0 ? s.party_name : '',
-        i === 0 ? (s.transaction_type === 'sale' ? 'Party Sale' : 'Approval') : '',
+        i === 0 ? txLabel(s.transaction_type) : '',
         l.item_name, l.metal_type, l.purity ?? '—', l.party,
         l.weight ? `${l.weight}g` : '—', l.notes ?? '—',
       ])
     )
+    const hasStockIn = data.approvalSales.some((s: any) => s.transaction_type === 'approval_return' || s.transaction_type === 'stock_in')
     if (asRows.length > 0) {
       autoTable(doc, {
         startY: y, head: [['Party', 'Type', 'Item', 'Metal', 'Purity', 'Party (Stock)', 'Weight', 'Notes']],
         body: asRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
       })
-      y = (doc as any).lastAutoTable.finalY + 8
+      y = (doc as any).lastAutoTable.finalY + 4
+      if (hasStockIn) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'italic')
+        doc.text('* Approval Return / Stock In items must be updated IN the stock', 14, y)
+        y += 6
+      }
+      y += 2
     } else { noRecords('No approval or party sale entries today.') }
 
     if (y > 220) { doc.addPage(); y = 15 }
@@ -454,43 +462,58 @@ export default function ReportsPage() {
             })}
           </ReportSection>
 
-          {/* Section 2 — Approval / Other Party Sales */}
-          <ReportSection title="Section 2 — Approval / Other Party Sales">
+          {/* Section 2 — Approval / Other Party Sales / Stock In */}
+          <ReportSection title="Section 2 — Approval / Other Party Sales / Stock In">
             {data.approvalSales.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No approval or party sale entries today.</p>
             ) : (
-              <div className="space-y-4">
-                {data.approvalSales.map((s: any) => (
-                  <div key={s.id} className="border border-gray-100 rounded-lg p-3">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-xs font-semibold uppercase text-amber-700">{s.transaction_type === 'sale' ? 'Party Sale' : 'Approval'}</span>
-                      <span className="text-sm font-medium text-gray-900">{s.party_name}</span>
-                    </div>
-                    <table className="w-full text-xs border-collapse">
-                      <thead><tr className="bg-gray-50">
-                        <th className="text-left p-1.5 font-medium">Item</th>
-                        <th className="text-left p-1.5 font-medium">Metal</th>
-                        <th className="text-left p-1.5 font-medium">Purity</th>
-                        <th className="text-left p-1.5 font-medium">Party</th>
-                        <th className="text-right p-1.5 font-medium">Weight</th>
-                        <th className="text-left p-1.5 font-medium">Notes</th>
-                      </tr></thead>
-                      <tbody>
-                        {(s.approval_sale_items ?? []).map((l: any) => (
-                          <tr key={l.id} className="border-t border-gray-100">
-                            <td className="p-1.5">{l.item_name}</td>
-                            <td className="p-1.5 capitalize">{l.metal_type}</td>
-                            <td className="p-1.5">{l.purity ?? '—'}</td>
-                            <td className="p-1.5">{l.party}</td>
-                            <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
-                            <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              <>
+                {data.approvalSales.some((s: any) => s.transaction_type === 'approval_return' || s.transaction_type === 'stock_in') && (
+                  <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+                    <span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-400 flex-shrink-0" />
+                    <span>Items highlighted in red must be updated <strong>IN</strong> the stock</span>
                   </div>
-                ))}
-              </div>
+                )}
+                <div className="space-y-4">
+                  {data.approvalSales.map((s: any) => {
+                    const isStockIn = s.transaction_type === 'approval_return' || s.transaction_type === 'stock_in'
+                    const typeLabel = s.transaction_type === 'sale' ? 'Party Sale'
+                      : s.transaction_type === 'approval' ? 'Approval'
+                      : s.transaction_type === 'approval_return' ? 'Approval Return'
+                      : 'Stock In'
+                    return (
+                      <div key={s.id} className={`border rounded-lg p-3 ${isStockIn ? 'border-red-300 bg-red-50' : 'border-gray-100'}`}>
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className={`text-xs font-semibold uppercase ${isStockIn ? 'text-red-700' : 'text-amber-700'}`}>{typeLabel}</span>
+                          <span className="text-sm font-medium text-gray-900">{s.party_name}</span>
+                        </div>
+                        <table className="w-full text-xs border-collapse">
+                          <thead><tr className={isStockIn ? 'bg-red-100' : 'bg-gray-50'}>
+                            <th className="text-left p-1.5 font-medium">Item</th>
+                            <th className="text-left p-1.5 font-medium">Metal</th>
+                            <th className="text-left p-1.5 font-medium">Purity</th>
+                            <th className="text-left p-1.5 font-medium">Party</th>
+                            <th className="text-right p-1.5 font-medium">Weight</th>
+                            <th className="text-left p-1.5 font-medium">Notes</th>
+                          </tr></thead>
+                          <tbody>
+                            {(s.approval_sale_items ?? []).map((l: any) => (
+                              <tr key={l.id} className={`border-t ${isStockIn ? 'border-red-200' : 'border-gray-100'}`}>
+                                <td className="p-1.5">{l.item_name}</td>
+                                <td className="p-1.5 capitalize">{l.metal_type}</td>
+                                <td className="p-1.5">{l.purity ?? '—'}</td>
+                                <td className="p-1.5">{l.party}</td>
+                                <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
+                                <td className="p-1.5 text-gray-500">{l.notes ?? '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </ReportSection>
 

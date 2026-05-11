@@ -29,7 +29,7 @@ export default function ApprovalSalesPage() {
   const [error, setError] = useState('')
 
   const [partyName, setPartyName] = useState('')
-  const [transactionType, setTransactionType] = useState<'sale' | 'approval'>('approval')
+  const [transactionType, setTransactionType] = useState<'sale' | 'approval' | 'approval_return' | 'stock_in'>('approval')
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
 
   useEffect(() => { loadData() }, [])
@@ -120,9 +120,11 @@ export default function ApprovalSalesPage() {
             </div>
             <div>
               <label className="label">Transaction Type *</label>
-              <select value={transactionType} onChange={e => setTransactionType(e.target.value as 'sale' | 'approval')} className="input">
+              <select value={transactionType} onChange={e => setTransactionType(e.target.value as 'sale' | 'approval' | 'approval_return' | 'stock_in')} className="input">
                 <option value="approval">Approval</option>
                 <option value="sale">Sale</option>
+                <option value="approval_return">Approval Return</option>
+                <option value="stock_in">Stock In</option>
               </select>
             </div>
           </div>
