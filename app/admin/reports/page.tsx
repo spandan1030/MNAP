@@ -356,28 +356,28 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">End-of-Day Report</h1>
-        <div className="flex items-center gap-3">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">End-of-Day Report</h1>
           <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
-          {data && (
-            <>
-              <button onClick={() => exportPDF('share')} disabled={exporting}
-                className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
-                {exporting ? 'Working…' : '💬 WhatsApp'}
-              </button>
-              <button onClick={() => exportPDF('print')} disabled={exporting}
-                className="bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
-                {exporting ? 'Working…' : '⎙ Print PDF'}
-              </button>
-              <button onClick={() => exportPDF('save')} disabled={exporting}
-                className="bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
-                {exporting ? 'Exporting…' : '↓ Export PDF'}
-              </button>
-            </>
-          )}
         </div>
+        {data && (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => exportPDF('share')} disabled={exporting}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+              {exporting ? 'Working…' : '💬 WhatsApp'}
+            </button>
+            <button onClick={() => exportPDF('print')} disabled={exporting}
+              className="bg-gray-700 hover:bg-gray-800 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+              {exporting ? 'Working…' : '⎙ Print PDF'}
+            </button>
+            <button onClick={() => exportPDF('save')} disabled={exporting}
+              className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+              {exporting ? 'Exporting…' : '↓ Export PDF'}
+            </button>
+          </div>
+        )}
       </div>
 
       {loading && <div className="text-gray-500 text-sm">Loading report…</div>}
@@ -715,7 +715,7 @@ function ReportSection({ title, children }: { title: string; children: React.Rea
       <div className="bg-amber-600 px-5 py-2.5">
         <h3 className="text-white font-semibold text-sm">{title}</h3>
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-4 overflow-x-auto">{children}</div>
     </div>
   )
 }
