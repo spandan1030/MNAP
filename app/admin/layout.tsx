@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Navbar } from '@/components/ui/Navbar'
+import { HomeButton } from '@/components/ui/HomeButton'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -19,6 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen flex flex-col">
       <Navbar role="admin" userName={profile.name} />
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+        <HomeButton href="/admin" />
         {children}
       </main>
     </div>
