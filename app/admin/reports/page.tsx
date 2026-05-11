@@ -136,19 +136,26 @@ export default function ReportsPage() {
     heading('Section 1 — Sales Register')
     const salesRows = data.bills.flatMap((b: any) =>
       (b.sales_line_items ?? []).map((l: any, i: number) => [
-        i === 0 ? b.customer_name : '', l.item_name,
+        i === 0 ? b.customer_name : '', l.order_in ? `★ ${l.item_name}` : l.item_name,
         l.metal_type, l.purity ?? '—', l.party ?? '—',
         l.weight ? `${l.weight}g` : '—', `₹${l.amount.toFixed(2)}`,
         i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
         i === 0 && b.old_silver_weight ? `${b.old_silver_weight}g` : '—',
       ])
     )
+    const hasOrderIn = data.bills.some((b: any) => (b.sales_line_items ?? []).some((l: any) => l.order_in))
     if (salesRows.length > 0) {
       autoTable(doc, {
         startY: y, head: [['Customer', 'Item', 'Metal', 'Purity', 'Party', 'Weight', 'Amount', 'Old Gold', 'Old Silver']],
         body: salesRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
       })
-      y = (doc as any).lastAutoTable.finalY + 8
+      y = (doc as any).lastAutoTable.finalY + 4
+      if (hasOrderIn) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'italic')
+        doc.text('★ Items marked Order In — must be updated in Order Stock', 14, y)
+        y += 6
+      }
+      y += 2
     } else { noRecords('No sales today.') }
 
     if (y > 250) { doc.addPage(); y = 15 }
@@ -392,6 +399,12 @@ export default function ReportsPage() {
         <div className="space-y-4">
           {/* Section 1 — Sales Register */}
           <ReportSection title="Section 1 — Sales Register">
+            {data.bills.some((b: any) => (b.sales_line_items ?? []).some((l: any) => l.order_in)) && (
+              <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
+                <span className="inline-block w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 flex-shrink-0" />
+                <span>Sky blue — item marked <strong>Order In</strong>: must be updated in Order Stock</span>
+              </div>
+            )}
             {['gold', 'silver', 'other'].map(metal => {
               const metalItems = data.bills.flatMap((b: any) =>
                 (b.sales_line_items ?? [])
@@ -423,7 +436,7 @@ export default function ReportsPage() {
                     </tr></thead>
                     <tbody>
                       {metalItems.map((item: any, i: number) => (
-                        <tr key={`${item.id}-${i}`} className="border-t border-gray-100">
+                        <tr key={`${item.id}-${i}`} className={item.order_in ? 'border-t border-sky-200 bg-sky-50' : 'border-t border-gray-100'}>
                           <td className="p-2">{item.customer_name}</td>
                           <td className="p-2">{item.item_name}</td>
                           <td className="p-2">{item.purity ?? '—'}</td>
