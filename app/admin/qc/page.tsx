@@ -12,7 +12,7 @@ interface AuditEntry { field_name: string; original_value: string; edited_value:
 
 const EDITABLE_FIELDS: Record<string, string[]> = {
   sales:        ['customer_name', 'customer_phone', 'bill_number', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount'],
-  receipt:      ['receipt_type', 'serial_number', 'customer_name', 'repair_type', 'weight', 'amount', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount', 'payment_mode', 'notes'],
+  receipt:      ['receipt_type', 'serial_number', 'customer_name', 'repair_type', 'weight', 'amount', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount', 'payment_mode', 'reference_serial', 'notes'],
   expense:      ['description', 'amount', 'payment_type', 'notes'],
   old_gold:     ['customer_name', 'customer_phone', 'metal_type', 'purity', 'weight', 'rate_per_gram', 'total_amount', 'payment_mode', 'notes'],
   direct:       ['customer_name', 'customer_number', 'amount', 'payment_mode', 'notes'],
@@ -640,8 +640,11 @@ function ReceiptEditForm({ data, set }: { data: any; set: (f: string, v: any) =>
         <EField label="Item Weight (g)" value={data.weight} onChange={v => set('weight', v)} type="number" step="0.001" />
       </>}
       <EField label="Total Amount (₹)" value={data.amount} onChange={v => set('amount', v)} type="number" step="0.01" />
-      <ESel label="Payment Mode" value={data.payment_mode} onChange={v => set('payment_mode', v)}
-        options={[['cash','Cash'],['card','Card'],['upi','UPI'],['cheque','Cheque']]} />
+      <ESel label="Payment Mode" value={data.payment_mode ?? ''} onChange={v => set('payment_mode', v || null)}
+        options={[['','None (fully by metal)'],['cash','Cash'],['card','Card'],['upi','UPI'],['phonepe','PhonePe'],['cheque','Cheque'],['advance_adjustment','Advance Adjustment'],['sip_adjustment','SIP Adjustment']]} />
+      {(data.payment_mode === 'advance_adjustment' || data.payment_mode === 'sip_adjustment') && (
+        <EField label="Reference Serial No." value={data.reference_serial} onChange={v => set('reference_serial', v)} />
+      )}
       <EField label="Old Gold Weight (g)" value={data.old_gold_weight} onChange={v => set('old_gold_weight', v)} type="number" step="0.001" />
       <EField label="Old Gold Amount (₹)" value={data.old_gold_amount} onChange={v => set('old_gold_amount', v)} type="number" step="0.01" />
       <EField label="Old Silver Weight (g)" value={data.old_silver_weight} onChange={v => set('old_silver_weight', v)} type="number" step="0.001" />
