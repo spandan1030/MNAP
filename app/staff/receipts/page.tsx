@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { Toast } from '@/components/ui/Toast'
 
 type ReceiptType = 'advance' | 'sip' | 'customer_credit' | 'repair'
@@ -11,7 +12,7 @@ const RECEIPT_LABELS: Record<ReceiptType, string> = {
   customer_credit: 'Customer Credit Receipt',
   repair: 'Repairing Receipt',
 }
-const PAYMENT_MODES = ['cash', 'card', 'upi', 'cheque']
+const PAYMENT_MODES = ['cash', 'card', 'upi', 'phonepe', 'cheque', 'advance_adjustment', 'sip_adjustment']
 
 export default function ReceiptsPage() {
   const supabase = createClient()
@@ -33,6 +34,7 @@ export default function ReceiptsPage() {
   const [paymentMode, setPaymentMode] = useState('cash')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [chequeNumber, setChequeNumber] = useState('')
+  const [referenceSerial, setReferenceSerial] = useState('')
   const [notes, setNotes] = useState('')
 
   // Derived amounts
@@ -57,7 +59,7 @@ export default function ReceiptsPage() {
     setSerialNumber(''); setCustomerName(''); setRepairType(''); setRepairWeight('')
     setTotalAmount(''); setOldGoldWeight(''); setOldGoldAmount('')
     setOldSilverWeight(''); setOldSilverAmount('')
-    setPaymentMode('cash'); setPaymentAmount(''); setChequeNumber(''); setNotes('')
+    setPaymentMode('cash'); setPaymentAmount(''); setChequeNumber(''); setReferenceSerial(''); setNotes('')
     setTimeout(() => setSuccess(false), 3000)
   }
 
@@ -91,8 +93,9 @@ export default function ReceiptsPage() {
       old_gold_amount: oldGoldAmt || null,
       old_silver_weight: parseFloat(oldSilverWeight) || null,
       old_silver_amount: oldSilverAmt || null,
-      payment_mode: paymentMode,
+      payment_mode: fullyByMetal ? null : paymentMode,
       cheque_number: paymentMode === 'cheque' && !fullyByMetal ? chequeNumber : null,
+      reference_serial: (paymentMode === 'advance_adjustment' || paymentMode === 'sip_adjustment') && !fullyByMetal ? referenceSerial : null,
       notes: notes || null,
       submitted_by: user!.id,
     })
@@ -181,7 +184,7 @@ export default function ReceiptsPage() {
                   <label className="label">Mode *</label>
                   <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="input">
                     {PAYMENT_MODES.map(m => (
-                      <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
+                      <option key={m} value={m}>{PAYMENT_MODE_LABELS[m as keyof typeof PAYMENT_MODE_LABELS] ?? m}</option>
                     ))}
                   </select>
                 </div>
@@ -204,6 +207,9 @@ export default function ReceiptsPage() {
               </div>
               {paymentMode === 'cheque' && (
                 <Field label="Cheque Number" value={chequeNumber} onChange={setChequeNumber} placeholder="Optional" />
+              )}
+              {(paymentMode === 'advance_adjustment' || paymentMode === 'sip_adjustment') && (
+                <Field label="Reference Serial No. *" value={referenceSerial} onChange={setReferenceSerial} placeholder="Ref. serial" required />
               )}
             </div>
           )}

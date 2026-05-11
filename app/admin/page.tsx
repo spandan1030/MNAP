@@ -23,7 +23,7 @@ export default async function AdminDashboard() {
       supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
         .eq('sales_bills.day_session_id', session.id).neq('sales_bills.status', 'rejected'),
       supabase.from('sales_bills').select('total_amount').eq('day_session_id', session.id).neq('status', 'rejected'),
-      supabase.from('money_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
+      supabase.from('money_receipts').select('amount, payment_mode, old_gold_amount, old_silver_amount').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('expenses').select('amount, payment_type').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),
       supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', session.id).neq('status', 'rejected'),

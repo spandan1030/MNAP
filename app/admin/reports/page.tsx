@@ -56,6 +56,8 @@ export default function ReportsPage() {
 
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
     const allPayments = bills.flatMap((b: any) => b.sales_payments ?? [])
+    const receiptNetAmt = (r: any) => r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+    const receiptByMode = (mode: string) => receipts.filter((r: any) => r.payment_mode === mode).reduce((s: number, r: any) => s + receiptNetAmt(r), 0)
     const cashSales = allPayments.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
     const cashReceipts = receipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0), 0)
     const cashExpenses = expenses.filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
@@ -73,18 +75,18 @@ export default function ReportsPage() {
       silverAmount: silverItems.reduce((s: number, l: any) => s + l.amount, 0),
       otherCount: otherItems.length,
       otherAmount: otherItems.reduce((s: number, l: any) => s + l.amount, 0),
-      oldGoldWeight: bills.reduce((s: number, b: any) => s + (b.old_gold_weight ?? 0), 0),
-      oldGoldAmount: bills.reduce((s: number, b: any) => s + (b.old_gold_amount ?? 0), 0),
-      oldSilverWeight: bills.reduce((s: number, b: any) => s + (b.old_silver_weight ?? 0), 0),
-      oldSilverAmount: bills.reduce((s: number, b: any) => s + (b.old_silver_amount ?? 0), 0),
-      paymentCash: sumPayments(bills, 'cash'),
-      paymentCard: sumPayments(bills, 'card'),
-      paymentUPI: sumPayments(bills, 'upi'),
-      paymentPhonePe: sumPayments(bills, 'phonepe'),
-      paymentCheque: sumPayments(bills, 'cheque'),
+      oldGoldWeight: bills.reduce((s: number, b: any) => s + (b.old_gold_weight ?? 0), 0) + receipts.reduce((s: number, r: any) => s + (r.old_gold_weight ?? 0), 0),
+      oldGoldAmount: bills.reduce((s: number, b: any) => s + (b.old_gold_amount ?? 0), 0) + receipts.reduce((s: number, r: any) => s + (r.old_gold_amount ?? 0), 0),
+      oldSilverWeight: bills.reduce((s: number, b: any) => s + (b.old_silver_weight ?? 0), 0) + receipts.reduce((s: number, r: any) => s + (r.old_silver_weight ?? 0), 0),
+      oldSilverAmount: bills.reduce((s: number, b: any) => s + (b.old_silver_amount ?? 0), 0) + receipts.reduce((s: number, r: any) => s + (r.old_silver_amount ?? 0), 0),
+      paymentCash: sumPayments(bills, 'cash') + receiptByMode('cash'),
+      paymentCard: sumPayments(bills, 'card') + receiptByMode('card'),
+      paymentUPI: sumPayments(bills, 'upi') + receiptByMode('upi'),
+      paymentPhonePe: sumPayments(bills, 'phonepe') + receiptByMode('phonepe'),
+      paymentCheque: sumPayments(bills, 'cheque') + receiptByMode('cheque'),
       paymentCredit: sumPayments(bills, 'customer_credit'),
-      paymentAdvance: sumPayments(bills, 'advance_adjustment'),
-      paymentSIP: sumPayments(bills, 'sip_adjustment'),
+      paymentAdvance: sumPayments(bills, 'advance_adjustment') + receiptByMode('advance_adjustment'),
+      paymentSIP: sumPayments(bills, 'sip_adjustment') + receiptByMode('sip_adjustment'),
       totalAdvanceReceipts: receipts.filter((r: any) => r.receipt_type === 'advance').reduce((s: number, r: any) => s + r.amount, 0),
       totalSIPReceipts: receipts.filter((r: any) => r.receipt_type === 'sip').reduce((s: number, r: any) => s + r.amount, 0),
       totalCreditReceipts: receipts.filter((r: any) => r.receipt_type === 'customer_credit').reduce((s: number, r: any) => s + r.amount, 0),
@@ -161,8 +163,8 @@ export default function ReportsPage() {
         ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
         ['Silver Amount', formatCurrency(data.silverAmount)],
         ['Other / Misc Items', `${data.otherCount} items — ${formatCurrency(data.otherAmount)}`],
-        ['Old Gold Received (from sales)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
-        ['Old Silver Received (from sales)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
+        ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
+        ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
       ],
       styles: { fontSize: 8 }, columnStyles: { 0: { fontStyle: 'bold' } }, margin: { left: 14, right: 14 },
     })
@@ -171,7 +173,7 @@ export default function ReportsPage() {
     if (y > 230) { doc.addPage(); y = 15 }
 
     // Section 3 — Payment Breakdown
-    heading('Section 3 — Payment Mode Breakdown (Sales)')
+    heading('Section 3 — Payment Mode Breakdown (Sales + Receipts)')
     autoTable(doc, {
       startY: y,
       body: [
@@ -447,13 +449,13 @@ export default function ReportsPage() {
               ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
               ['Silver Amount', formatCurrency(data.silverAmount)],
               ['Other / Misc Items', `${data.otherCount} items — ${formatCurrency(data.otherAmount)}`],
-              ['Old Gold Received (from sales)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
-              ['Old Silver Received (from sales)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
+              ['Old Gold Received (sales + receipts)', `${data.oldGoldWeight.toFixed(3)}g — ${formatCurrency(data.oldGoldAmount)}`],
+              ['Old Silver Received (sales + receipts)', `${data.oldSilverWeight.toFixed(3)}g — ${formatCurrency(data.oldSilverAmount)}`],
             ]} />
           </ReportSection>
 
           {/* Section 3 — Payment Breakdown */}
-          <ReportSection title="Section 3 — Payment Mode Breakdown (Sales)">
+          <ReportSection title="Section 3 — Payment Mode Breakdown (Sales + Receipts)">
             <SummaryTable rows={[
               ['Cash', formatCurrency(data.paymentCash)],
               ['Card', formatCurrency(data.paymentCard)],

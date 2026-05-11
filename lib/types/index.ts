@@ -87,8 +87,13 @@ export interface MoneyReceipt {
   repair_type: string | null
   weight: number | null
   amount: number
-  payment_mode: 'cash' | 'card' | 'upi' | 'cheque'
+  old_gold_weight: number | null
+  old_gold_amount: number | null
+  old_silver_weight: number | null
+  old_silver_amount: number | null
+  payment_mode: 'cash' | 'card' | 'upi' | 'phonepe' | 'cheque' | 'advance_adjustment' | 'sip_adjustment' | null
   cheque_number: string | null
+  reference_serial: string | null
   notes: string | null
   status: EntryStatus
   submitted_by: string
