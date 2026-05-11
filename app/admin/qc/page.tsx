@@ -537,11 +537,16 @@ function SalesBillDetail({ data, dailyRates }: { data: any; dailyRates: any }) {
                 <Fragment key={l.id}>
                   <tr
                     onClick={() => canCheck && setCheckedItemId(isOpen ? null : l.id)}
-                    className={`border-t border-gray-100 transition-colors
-                      ${canCheck ? 'cursor-pointer hover:bg-amber-50' : ''}
-                      ${isOpen ? 'bg-amber-50' : ''}`}
+                    className={`border-t transition-colors
+                      ${l.order_in ? 'bg-sky-100 border-sky-300 border-l-4 border-l-sky-400' : 'border-gray-100'}
+                      ${canCheck && !l.order_in ? 'cursor-pointer hover:bg-amber-50' : ''}
+                      ${canCheck && l.order_in ? 'cursor-pointer hover:bg-sky-200' : ''}
+                      ${isOpen && !l.order_in ? 'bg-amber-50' : ''}`}
                   >
-                    <td className="p-1.5">{l.item_name}</td>
+                    <td className="p-1.5">
+                      {l.item_name}
+                      {l.order_in && <span className="ml-1.5 text-[10px] font-semibold text-sky-700 bg-sky-200 border border-sky-300 px-1.5 py-0.5 rounded-full">Order In</span>}
+                    </td>
                     <td className="p-1.5 capitalize">{l.metal_type ?? '—'}</td>
                     <td className="p-1.5">{l.purity ?? '—'}</td>
                     <td className="p-1.5">{l.party ?? '—'}</td>
