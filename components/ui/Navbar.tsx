@@ -19,6 +19,7 @@ const adminLinks: NavItem[] = [
   { href: '/admin/reports', label: 'Reports' },
   { href: '/admin/archival', label: 'Archival' },
   { href: '/admin/items', label: 'Item Master' },
+  { href: '/admin/rates', label: 'Rates' },
 ]
 
 const staffLinks: NavItem[] = [

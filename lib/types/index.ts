@@ -195,6 +195,19 @@ export interface PartyPayment {
   submitter?: Profile
 }
 
+export interface DailyRate {
+  id: string
+  date: string
+  rate_24kt: number | null
+  rate_22kt: number | null
+  rate_18kt: number | null
+  rate_silver: number | null
+  source: 'manual' | 'google_sheets'
+  updated_by: string | null
+  updated_at: string
+  updater?: Profile
+}
+
 export interface AuditLog {
   id: string
   table_name: string
