@@ -23,6 +23,7 @@ export default function ReportsPage() {
   const [exporting, setExporting] = useState(false)
   const [dailyRates, setDailyRates] = useState<any>(null)
   const [checkedItemId, setCheckedItemId] = useState<string | null>(null)
+  const [showStockSheet, setShowStockSheet] = useState(false)
 
   async function loadReport() {
     setLoading(true)
@@ -395,6 +396,10 @@ export default function ReportsPage() {
             <button onClick={() => exportPDF('save')} disabled={exporting}
               className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
               {exporting ? 'Exporting…' : '↓ Export PDF'}
+            </button>
+            <button onClick={() => setShowStockSheet(true)}
+              className="bg-sky-700 hover:bg-sky-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg">
+              📦 Stock Sheet
             </button>
           </div>
         )}
@@ -775,6 +780,115 @@ export default function ReportsPage() {
           </ReportSection>
         </div>
       )}
+
+      {showStockSheet && data && (
+        <StockSheetModal data={data} date={reportDate} onClose={() => setShowStockSheet(false)} />
+      )}
+    </div>
+  )
+}
+
+function StockSheetModal({ data, date, onClose }: { data: any; date: string; onClose: () => void }) {
+  // Collect all items across the four categories
+  const orderInItems = (data.bills ?? []).flatMap((b: any) =>
+    (b.sales_line_items ?? [])
+      .filter((l: any) => l.order_in)
+      .map((l: any) => ({ item_name: l.item_name, party: l.party ?? '—', purity: l.purity ?? '—', weight: l.weight, metal_type: l.metal_type, _cat: 'Order In' }))
+  )
+
+  const fromApproval = (type: string, label: string) =>
+    (data.approvalSales ?? [])
+      .filter((s: any) => s.transaction_type === type)
+      .flatMap((s: any) => (s.approval_sale_items ?? []).map((l: any) => ({
+        item_name: l.item_name, party: s.party_name, purity: l.purity ?? '—',
+        weight: l.weight, metal_type: l.metal_type, _cat: label,
+      })))
+
+  const approvalItems   = fromApproval('approval', 'Approval')
+  const partySaleItems  = fromApproval('sale', 'Party Sale')
+  const stockInItems    = [
+    ...fromApproval('stock_in', 'Stock In'),
+    ...fromApproval('approval_return', 'Approval Return'),
+  ]
+
+  const categories = [
+    { label: 'Order In', items: orderInItems },
+    { label: 'Approval', items: approvalItems },
+    { label: 'Party Sale', items: partySaleItems },
+    { label: 'Stock In / Approval Return', items: stockInItems },
+  ].filter(c => c.items.length > 0)
+
+  const metalGroup = (items: any[]) => {
+    const gold    = items.filter((l: any) => l.metal_type === 'gold' && l.purity !== 'Diamond').sort((a: any, b: any) => a.item_name.localeCompare(b.item_name))
+    const diamond = items.filter((l: any) => l.purity === 'Diamond').sort((a: any, b: any) => a.item_name.localeCompare(b.item_name))
+    const silver  = items.filter((l: any) => l.metal_type === 'silver').sort((a: any, b: any) => a.item_name.localeCompare(b.item_name))
+    return { gold, diamond, silver }
+  }
+
+  const fmtDate = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-2xl w-full max-w-2xl my-8 shadow-2xl">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Stock Update Sheet</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{fmtDate(date)}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+        </div>
+
+        <div className="p-5 space-y-6 max-h-[80vh] overflow-y-auto">
+          {categories.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-4">No stock update items today.</p>
+          )}
+
+          {categories.map(cat => {
+            const { gold, diamond, silver } = metalGroup(cat.items)
+            const metals = [
+              { label: 'Gold', rows: gold },
+              { label: 'Diamond', rows: diamond },
+              { label: 'Silver', rows: silver },
+            ].filter(m => m.rows.length > 0)
+
+            return (
+              <div key={cat.label}>
+                <div className="bg-amber-600 px-3 py-1.5 rounded-lg mb-3">
+                  <h3 className="text-white font-semibold text-sm">{cat.label}</h3>
+                </div>
+                <div className="space-y-4">
+                  {metals.map(({ label, rows }) => (
+                    <div key={label}>
+                      <p className="text-xs font-semibold uppercase text-amber-700 mb-1.5">{label}</p>
+                      <table className="w-full text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50">
+                            <th className="text-left p-2 font-medium">Item</th>
+                            <th className="text-left p-2 font-medium">Party</th>
+                            <th className="text-left p-2 font-medium">Purity</th>
+                            <th className="text-right p-2 font-medium">Weight</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map((r: any, i: number) => (
+                            <tr key={i} className="border-t border-gray-100">
+                              <td className="p-2 font-medium text-gray-900">{r.item_name}</td>
+                              <td className="p-2 text-gray-600">{r.party}</td>
+                              <td className="p-2 text-gray-600">{r.purity}</td>
+                              <td className="p-2 text-right text-gray-800">{r.weight ? `${r.weight}g` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
