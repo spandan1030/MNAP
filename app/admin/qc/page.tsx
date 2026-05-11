@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
@@ -60,6 +60,7 @@ export default function QCPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [dailyRates, setDailyRates] = useState<any>(null)
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
@@ -119,7 +120,13 @@ export default function QCPage() {
     setAuditLog(data ?? [])
   }
 
-  function closeModal() { setSelected(null); setEditMode(false); setEditData(null); setEditReason('') }
+  async function fetchDailyRates() {
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase.from('daily_rates').select('*').eq('date', today).maybeSingle()
+    setDailyRates(data ?? null)
+  }
+
+  function closeModal() { setSelected(null); setEditMode(false); setEditData(null); setEditReason(''); setDailyRates(null) }
 
   async function handleApprove(type: string, id: string) {
     setActionLoading(true)
@@ -225,6 +232,7 @@ export default function QCPage() {
                 setRejectReason(''); setEditReason(''); setMessage('')
                 setEditMode(false); setEditData(null)
                 loadAuditLog(data.id)
+                if (type === 'sales') fetchDailyRates()
               }} />
           ))}
         </div>
@@ -282,7 +290,7 @@ export default function QCPage() {
                 </div>
               ) : (
                 <>
-                  {selected.type === 'sales'        && <SalesBillDetail     data={selected.data} />}
+                  {selected.type === 'sales'        && <SalesBillDetail     data={selected.data} dailyRates={dailyRates} />}
                   {selected.type === 'receipt'      && <ReceiptDetail       data={selected.data} />}
                   {selected.type === 'expense'      && <ExpenseDetail       data={selected.data} />}
                   {selected.type === 'old_gold'     && <OldGoldDetail       data={selected.data} />}
@@ -419,7 +427,81 @@ function ESel({ label, value, onChange, options }: {
 
 // ─── Detail views ────────────────────────────────────────────────────────────
 
-function SalesBillDetail({ data }: { data: any }) {
+function getRateForItem(item: any, rates: any): { rate: number; label: string } | null {
+  if (!rates || !item.weight) return null
+  if (item.metal_type === 'silver') return rates.rate_silver ? { rate: rates.rate_silver, label: 'Silver' } : null
+  if (item.metal_type === 'gold') {
+    if (item.purity === '24K' && rates.rate_24kt) return { rate: rates.rate_24kt, label: '24 KT' }
+    if (item.purity === '22K' && rates.rate_22kt) return { rate: rates.rate_22kt, label: '22 KT' }
+    if (item.purity === '18K' && rates.rate_18kt) return { rate: rates.rate_18kt, label: '18 KT' }
+  }
+  return null
+}
+
+function RateCheckPanel({ item, rates, onClose }: { item: any; rates: any; onClose: () => void }) {
+  const rateInfo = getRateForItem(item, rates)
+  const weight = item.weight ?? 0
+  const billedAmount = item.amount ?? 0
+
+  let metalValue: number | null = null
+  let makingPct: number | null = null
+
+  if (rateInfo && weight > 0) {
+    metalValue = rateInfo.rate * weight
+    if (metalValue > 0 && billedAmount > 0) {
+      makingPct = ((billedAmount / 1.03) / metalValue - 1) * 100
+    }
+  }
+
+  return (
+    <div className="mt-1 mb-2 mx-0 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs space-y-1.5">
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-semibold text-amber-800 text-[11px] uppercase tracking-wide">Rate Check — {item.item_name}</span>
+        <button onClick={onClose} className="text-amber-400 hover:text-amber-700 font-bold text-sm leading-none">×</button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        <span className="text-gray-500">Weight</span>
+        <span className="font-medium text-gray-900">{weight ? `${weight}g` : '—'}</span>
+
+        <span className="text-gray-500">Rate ({rateInfo ? rateInfo.label : item.purity ?? item.metal_type})</span>
+        <span className="font-medium text-gray-900">
+          {rateInfo ? `₹${rateInfo.rate.toLocaleString('en-IN', { minimumFractionDigits: 2 })}/g` : <span className="text-red-500">No rate saved for today</span>}
+        </span>
+
+        {metalValue != null && (
+          <>
+            <span className="text-gray-500">Metal value</span>
+            <span className="font-medium text-gray-900">{formatCurrency(metalValue)}</span>
+          </>
+        )}
+
+        <span className="text-gray-500">Billed amount</span>
+        <span className="font-medium text-gray-900">{formatCurrency(billedAmount)}</span>
+
+        {makingPct != null && (
+          <>
+            <span className="text-gray-500">Making charge (back-calc)</span>
+            <span className="font-semibold text-amber-700">{makingPct.toFixed(2)}%</span>
+          </>
+        )}
+      </div>
+
+      {!rateInfo && rates && (
+        <p className="text-gray-400 italic pt-1">
+          {item.metal_type === 'other' ? 'Rate check not applicable for Other metal type.' : `No ${item.purity ?? item.metal_type} rate saved for today — set it in Admin → Rates.`}
+        </p>
+      )}
+      {!rates && (
+        <p className="text-gray-400 italic pt-1">No rates saved for today — set them in Admin → Rates.</p>
+      )}
+    </div>
+  )
+}
+
+function SalesBillDetail({ data, dailyRates }: { data: any; dailyRates: any }) {
+  const [checkedItemId, setCheckedItemId] = useState<string | null>(null)
+
   return (
     <div className="space-y-3 text-sm">
       <InfoGrid items={[
@@ -434,7 +516,10 @@ function SalesBillDetail({ data }: { data: any }) {
         </div>
       )}
       <div>
-        <p className="text-xs font-semibold text-gray-500 mb-1">Line Items</p>
+        <p className="text-xs font-semibold text-gray-500 mb-1">
+          Line Items
+          <span className="ml-1.5 text-gray-400 font-normal normal-case">· tap a row to verify amount</span>
+        </p>
         <table className="w-full text-xs border-collapse">
           <thead><tr className="bg-gray-50">
             <th className="text-left p-1.5 font-medium">Item</th>
@@ -445,16 +530,34 @@ function SalesBillDetail({ data }: { data: any }) {
             <th className="text-right p-1.5 font-medium">Amount</th>
           </tr></thead>
           <tbody>
-            {(data.sales_line_items ?? []).map((l: any) => (
-              <tr key={l.id} className="border-t border-gray-100">
-                <td className="p-1.5">{l.item_name}</td>
-                <td className="p-1.5 capitalize">{l.metal_type ?? '—'}</td>
-                <td className="p-1.5">{l.purity ?? '—'}</td>
-                <td className="p-1.5">{l.party ?? '—'}</td>
-                <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
-                <td className="p-1.5 text-right">{formatCurrency(l.amount)}</td>
-              </tr>
-            ))}
+            {(data.sales_line_items ?? []).map((l: any) => {
+              const isOpen = checkedItemId === l.id
+              const canCheck = l.metal_type !== 'other' && l.weight
+              return (
+                <Fragment key={l.id}>
+                  <tr
+                    onClick={() => canCheck && setCheckedItemId(isOpen ? null : l.id)}
+                    className={`border-t border-gray-100 transition-colors
+                      ${canCheck ? 'cursor-pointer hover:bg-amber-50' : ''}
+                      ${isOpen ? 'bg-amber-50' : ''}`}
+                  >
+                    <td className="p-1.5">{l.item_name}</td>
+                    <td className="p-1.5 capitalize">{l.metal_type ?? '—'}</td>
+                    <td className="p-1.5">{l.purity ?? '—'}</td>
+                    <td className="p-1.5">{l.party ?? '—'}</td>
+                    <td className="p-1.5 text-right">{l.weight ? `${l.weight}g` : '—'}</td>
+                    <td className="p-1.5 text-right">{formatCurrency(l.amount)}</td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={6} className="px-1 pb-1">
+                        <RateCheckPanel item={l} rates={dailyRates} onClose={() => setCheckedItemId(null)} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
