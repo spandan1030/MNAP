@@ -791,9 +791,10 @@ export default function ReportsPage() {
 function StockSheetModal({ data, date, onClose }: { data: any; date: string; onClose: () => void }) {
   // Collect all items across the four categories
   const orderInItems = (data.bills ?? []).flatMap((b: any) =>
-    (b.sales_line_items ?? [])
-      .filter((l: any) => l.order_in)
-      .map((l: any) => ({ item_name: l.item_name, party: l.party ?? '—', purity: l.purity ?? '—', weight: l.weight, metal_type: l.metal_type, _cat: 'Order In' }))
+    (b.sales_line_items ?? []).map((l: any) => ({
+      item_name: l.item_name, party: l.party ?? '—', purity: l.purity ?? '—',
+      weight: l.weight, metal_type: l.metal_type, order_in: !!l.order_in, _cat: 'Sales Register',
+    }))
   )
 
   const fromApproval = (type: string, label: string) =>
@@ -812,7 +813,7 @@ function StockSheetModal({ data, date, onClose }: { data: any; date: string; onC
   ]
 
   const categories = [
-    { label: 'Order In', items: orderInItems },
+    { label: 'Sales Register', items: orderInItems },
     { label: 'Approval', items: approvalItems },
     { label: 'Party Sale', items: partySaleItems },
     { label: 'Stock In / Approval Return', items: stockInItems },
@@ -872,8 +873,11 @@ function StockSheetModal({ data, date, onClose }: { data: any; date: string; onC
                         </thead>
                         <tbody>
                           {rows.map((r: any, i: number) => (
-                            <tr key={i} className="border-t border-gray-100">
-                              <td className="p-2 font-medium text-gray-900">{r.item_name}</td>
+                            <tr key={i} className={`border-t ${r.order_in ? 'bg-sky-50 border-sky-200' : 'border-gray-100'}`}>
+                              <td className="p-2 font-medium text-gray-900">
+                                {r.item_name}
+                                {r.order_in && <span className="ml-1.5 text-[10px] font-semibold text-sky-700 bg-sky-200 border border-sky-300 px-1.5 py-0.5 rounded-full">Order In</span>}
+                              </td>
                               <td className="p-2 text-gray-600">{r.party}</td>
                               <td className="p-2 text-gray-600">{r.purity}</td>
                               <td className="p-2 text-right text-gray-800">{r.weight ? `${r.weight}g` : '—'}</td>
