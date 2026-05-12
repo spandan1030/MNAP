@@ -5,8 +5,12 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    if (!process.env.SYNC_RATES_SECRET || body.secret !== process.env.SYNC_RATES_SECRET) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const envSecret = process.env.SYNC_RATES_SECRET
+    console.log('env secret set:', !!envSecret, '| length:', envSecret?.length ?? 0)
+    console.log('received secret length:', body.secret?.length ?? 0)
+
+    if (!envSecret || body.secret !== envSecret) {
+      return NextResponse.json({ error: 'Unauthorized', debug: { envSet: !!envSecret, match: body.secret === envSecret } }, { status: 401 })
     }
 
     const { rate_18kt, rate_22kt, rate_24kt } = body
