@@ -4,15 +4,6 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDateTime } from '@/lib/utils'
 
-// ─── FUTURE GOOGLE SHEETS INTEGRATION ───────────────────────────────────────
-// When ready to auto-fetch rates from Google Sheets:
-// 1. Store Sheet ID + cell mappings in env vars: SHEETS_ID, SHEETS_API_KEY
-// 2. Create fetchRatesFromSheets() calling the Sheets API v4 values endpoint.
-// 3. Call upsertRates(date, parsedRates, 'google_sheets') — same function below.
-// 4. Wire to a "Sync from Sheets" button or a Vercel Cron Job.
-// DB schema and upsert logic need zero changes; only the caller changes.
-// ────────────────────────────────────────────────────────────────────────────
-
 interface RateForm {
   rate_24kt: string
   rate_22kt: string
