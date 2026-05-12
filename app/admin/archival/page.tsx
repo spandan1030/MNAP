@@ -5,14 +5,21 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
+function adjSerial(mode: string, serial: string | null | undefined): string {
+  if ((mode === 'advance_adjustment' || mode === 'sip_adjustment') && serial) return ` (${serial})`
+  if ((mode === 'advance_adjustment' || mode === 'sip_adjustment') && !serial) return ' (—)'
+  return ''
+}
+
 function receiptSettlementLabel(r: any): string {
   const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
-  if (metalTotal <= 0) return PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode
+  const modeLabel = (PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode) + adjSerial(r.payment_mode, r.reference_serial)
+  if (metalTotal <= 0) return modeLabel
   const cashPortion = r.amount - metalTotal
   const parts: string[] = []
   if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
   if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
-  if (cashPortion > 0.005) parts.unshift(PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode)
+  if (cashPortion > 0.005) parts.unshift(modeLabel)
   return parts.join(' + ')
 }
 
@@ -113,7 +120,7 @@ export default function ArchivalPage() {
         body: bills.map((b: any) => [
           b.bill_number, b.customer_name, formatCurrency(b.total_amount),
           [(b.old_gold_amount ?? 0) > 0 ? `Gold: ${formatCurrency(b.old_gold_amount)}` : '', (b.old_silver_amount ?? 0) > 0 ? `Silver: ${formatCurrency(b.old_silver_amount)}` : ''].filter(Boolean).join(' / ') || '—',
-          (b.sales_payments ?? []).map((p: any) => `${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}: ${formatCurrency(p.amount)}`).join(' | '),
+          (b.sales_payments ?? []).map((p: any) => `${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}${adjSerial(p.payment_mode, p.reference_serial)}: ${formatCurrency(p.amount)}`).join(' | '),
           b.status,
         ]),
         styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
@@ -308,7 +315,9 @@ export default function ArchivalPage() {
                         </td>
                         <td className="p-2">
                           {(b.sales_payments ?? []).map((p: any) => (
-                            <div key={p.id}>{PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}: {formatCurrency(p.amount)}</div>
+                            <div key={p.id}>
+                              {PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}{adjSerial(p.payment_mode, p.reference_serial)}: {formatCurrency(p.amount)}
+                            </div>
                           ))}
                         </td>
                         <td className="p-2"><StatusBadge status={b.status} /></td>

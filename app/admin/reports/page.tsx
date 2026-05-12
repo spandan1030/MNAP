@@ -74,6 +74,23 @@ export default function ReportsPage() {
     const expectedCash = opening + cashSales + cashReceipts + cashDirectIn - cashExpenses - cashOldGoldOut - cashPartyPayOut
     const actualClosing = (session.register_a_closing ?? 0) + (session.register_b_closing ?? 0)
 
+    const adjustments = [
+      ...bills.flatMap((b: any) =>
+        (b.sales_payments ?? [])
+          .filter((p: any) => p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment')
+          .map((p: any) => ({
+            source: 'Sale', customer: b.customer_name, reference: b.bill_number,
+            mode: p.payment_mode, serial: p.reference_serial ?? null, amount: p.amount,
+          }))
+      ),
+      ...receipts
+        .filter((r: any) => r.payment_mode === 'advance_adjustment' || r.payment_mode === 'sip_adjustment')
+        .map((r: any) => ({
+          source: 'Receipt', customer: r.customer_name, reference: r.serial_number ?? null,
+          mode: r.payment_mode, serial: r.reference_serial ?? null, amount: r.amount,
+        })),
+    ]
+
     setData({
       session, bills, receipts, expenses, oldGoldPurchases, directReceipts,
       goldWeight: goldItems.reduce((s: number, l: any) => s + (l.weight ?? 0), 0),
@@ -106,6 +123,7 @@ export default function ReportsPage() {
       cashSales, cashReceipts, cashExpenses, cashOldGoldOut, cashDirectIn, cashPartyPayOut,
       opening, expectedCash, actualClosing,
       variance: actualClosing - expectedCash,
+      adjustments,
     })
     setLoading(false)
   }
@@ -316,8 +334,24 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 9 — Expenses
-    heading('Section 9 — Expenses')
+    // Section 9 — Advance & SIP Adjustments
+    if (y > 220) { doc.addPage(); y = 15 }
+    heading('Section 9 — Advance & SIP Adjustments')
+    const adjRows = data.adjustments.map((a: any) => [
+      a.source, a.customer, a.reference ?? '—',
+      PAYMENT_MODE_LABELS[a.mode], a.serial ?? '—', pdfAmt(a.amount),
+    ])
+    if (adjRows.length > 0) {
+      adjRows.push(['', '', '', '', 'TOTAL', pdfAmt(data.adjustments.reduce((s: number, a: any) => s + a.amount, 0))])
+      autoTable(doc, {
+        startY: y, head: [['Source', 'Customer', 'Bill / Receipt No.', 'Type', 'Serial No.', 'Amount']],
+        body: adjRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 8
+    } else { noRecords('No advance or SIP adjustments today.') }
+
+    // Section 10 — Expenses
+    heading('Section 10 — Expenses')
     const expenseRows = data.expenses.map((e: any) => [
       e.description,
       e.payment_type === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
@@ -335,8 +369,8 @@ export default function ReportsPage() {
 
     if (y > 200) { doc.addPage(); y = 15 }
 
-    // Section 10 — Cash Register
-    heading('Section 10 — Cash Register Summary')
+    // Section 11 — Cash Register
+    heading('Section 11 — Cash Register Summary')
     autoTable(doc, {
       startY: y,
       body: [
@@ -726,8 +760,42 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 9 — Expenses */}
-          <ReportSection title="Section 9 — Expenses">
+          {/* Section 9 — Advance & SIP Adjustments */}
+          <ReportSection title="Section 9 — Advance & SIP Adjustments">
+            {data.adjustments.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-2">No advance or SIP adjustments today.</p>
+            ) : (
+              <table className="w-full text-xs border-collapse">
+                <thead><tr className="bg-gray-50">
+                  <th className="text-left p-2 font-medium">Source</th>
+                  <th className="text-left p-2 font-medium">Customer</th>
+                  <th className="text-left p-2 font-medium">Bill / Receipt No.</th>
+                  <th className="text-left p-2 font-medium">Type</th>
+                  <th className="text-left p-2 font-medium">Serial No.</th>
+                  <th className="text-right p-2 font-medium">Amount</th>
+                </tr></thead>
+                <tbody>
+                  {data.adjustments.map((a: any, i: number) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="p-2">{a.source}</td>
+                      <td className="p-2">{a.customer}</td>
+                      <td className="p-2">{a.reference ?? '—'}</td>
+                      <td className="p-2">{PAYMENT_MODE_LABELS[a.mode]}</td>
+                      <td className="p-2 font-medium">{a.serial ?? '—'}</td>
+                      <td className="p-2 text-right">{formatCurrency(a.amount)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
+                    <td colSpan={5} className="p-2">Total Adjusted</td>
+                    <td className="p-2 text-right">{formatCurrency(data.adjustments.reduce((s: number, a: any) => s + a.amount, 0))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+          </ReportSection>
+
+          {/* Section 10 — Expenses */}
+          <ReportSection title="Section 10 — Expenses">
             {data.expenses.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-2">No expenses today.</p>
             ) : (
@@ -757,8 +825,8 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 10 — Cash Register Summary */}
-          <ReportSection title="Section 10 — Cash Register Summary">
+          {/* Section 11 — Cash Register Summary */}
+          <ReportSection title="Section 11 — Cash Register Summary">
             <SummaryTable rows={[
               ['Register A — Opening Balance', formatCurrency(data.session.register_a_opening)],
               ['Register B — Opening Balance', formatCurrency(data.session.register_b_opening)],
