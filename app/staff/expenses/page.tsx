@@ -7,9 +7,13 @@ import { Toast } from '@/components/ui/Toast'
 export default function ExpensesPage() {
   const supabase = createClient()
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  const [sentBackEntries, setSentBackEntries] = useState<any[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
@@ -17,10 +21,40 @@ export default function ExpensesPage() {
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0]
-    createClient().from('day_sessions').select('id').eq('date', today).eq('status', 'open').single()
-      .then(({ data }) => setSessionId(data?.id ?? null))
-  }, [])
+    async function init() {
+      const today = new Date().toISOString().split('T')[0]
+      const [{ data: sessionData }, { data: { user } }] = await Promise.all([
+        createClient().from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
+        createClient().auth.getUser(),
+      ])
+      const sid = sessionData?.id ?? null
+      setSessionId(sid)
+      setUserId(user?.id ?? null)
+      if (sid && user) await loadSentBack(sid, user.id)
+    }
+    init()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadSentBack(sid: string, uid: string) {
+    const { data } = await supabase.from('expenses')
+      .select('id, description, amount, payment_type, notes, send_back_reason')
+      .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', uid)
+    setSentBackEntries(data ?? [])
+  }
+
+  function loadForEdit(entry: any) {
+    setDescription(entry.description ?? '')
+    setAmount(entry.amount?.toString() ?? '')
+    setPaymentType(entry.payment_type ?? 'cash')
+    setNotes(entry.notes ?? '')
+    setEditingId(entry.id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setDescription(''); setAmount(''); setPaymentType('cash'); setNotes('')
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,14 +62,36 @@ export default function ExpensesPage() {
     if (!sessionId) { setError('No open day session. Ask admin to open the day.'); return }
 
     setSubmitting(true)
-    const { data: { user } } = await supabase.auth.getUser()
 
-    const { error: err } = await supabase.from('expenses').insert({
-      day_session_id: sessionId,
+    const payload = {
       description,
       amount: parseFloat(amount),
       payment_type: paymentType,
       notes: notes || null,
+    }
+
+    if (editingId) {
+      const { error: err } = await supabase.from('expenses').update({
+        ...payload,
+        status: 'pending',
+        send_back_reason: null,
+        submitted_at: new Date().toISOString(),
+      }).eq('id', editingId)
+      if (err) { setError(err.message) } else {
+        setSuccess(true)
+        setEditingId(null)
+        await loadSentBack(sessionId, userId!)
+        setDescription(''); setAmount(''); setPaymentType('cash'); setNotes('')
+        setTimeout(() => setSuccess(false), 3000)
+      }
+      setSubmitting(false)
+      return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: err } = await supabase.from('expenses').insert({
+      ...payload,
+      day_session_id: sessionId,
       submitted_by: user!.id,
     })
 
@@ -52,7 +108,34 @@ export default function ExpensesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Expense Entry — Module C</h1>
 
-      <Toast show={success} message="Expense submitted and pending admin review." />
+      <Toast show={success} message={editingId ? 'Expense resubmitted for admin review.' : 'Expense submitted and pending admin review.'} />
+
+      {/* Sent-back panel */}
+      {sentBackEntries.length > 0 && (
+        <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-orange-800">↩ {sentBackEntries.length} expense{sentBackEntries.length > 1 ? 's' : ''} sent back for correction</p>
+          {sentBackEntries.map(entry => (
+            <div key={entry.id} className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-orange-900">{entry.description} — ₹{entry.amount}</p>
+                {entry.send_back_reason && <p className="text-xs text-orange-700 mt-0.5">Admin note: {entry.send_back_reason}</p>}
+              </div>
+              <button type="button" onClick={() => loadForEdit(entry)}
+                className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                Load &amp; Fix
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edit mode banner */}
+      {editingId && (
+        <div className="bg-amber-50 border border-amber-400 rounded-xl px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-amber-800">✏️ Editing sent-back expense — fix and resubmit</p>
+          <button type="button" onClick={cancelEdit} className="text-xs text-amber-700 underline">Cancel edit</button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <div>
@@ -89,7 +172,7 @@ export default function ExpensesPage() {
 
         <button type="submit" disabled={submitting}
           className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2.5 rounded-xl text-sm">
-          {submitting ? 'Submitting…' : 'Submit Expense'}
+          {submitting ? 'Submitting…' : editingId ? 'Resubmit Expense' : 'Submit Expense'}
         </button>
       </form>
     </div>

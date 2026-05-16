@@ -49,6 +49,11 @@ export default function SalesPage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
+  // Sent-back entries
+  const [sentBackEntries, setSentBackEntries] = useState<any[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingBillNumber, setEditingBillNumber] = useState<string>('')
+
   const [customerName, setCustomerName] = useState('')
   const [billNumber, setBillNumber] = useState('')
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
@@ -67,7 +72,60 @@ export default function SalesPage() {
       supabase.from('day_sessions').select('id, status').eq('date', today).eq('status', 'open').single(),
     ])
     setItems((itemsRes.data ?? []).map((i: { name: string }) => i.name))
-    setSessionId(sessionRes.data?.id ?? null)
+    const sid = sessionRes.data?.id ?? null
+    setSessionId(sid)
+    if (sid) loadSentBack(sid)
+  }
+
+  async function loadSentBack(sid: string) {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase.from('sales_bills')
+      .select('id, bill_number, customer_name, total_amount, send_back_reason, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount')
+      .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', user!.id)
+    setSentBackEntries(data ?? [])
+  }
+
+  async function loadForEdit(bill: any) {
+    const [liRes, spRes] = await Promise.all([
+      supabase.from('sales_line_items').select('*').eq('bill_id', bill.id),
+      supabase.from('sales_payments').select('*').eq('bill_id', bill.id),
+    ])
+    const li = liRes.data ?? []
+    const sp = spRes.data ?? []
+
+    setEditingId(bill.id)
+    setEditingBillNumber(bill.bill_number)
+    setCustomerName(bill.customer_name)
+    setBillNumber(bill.bill_number.split('-').slice(2).join('-') || bill.bill_number)
+    setOldGoldWeight(bill.old_gold_weight ? String(bill.old_gold_weight) : '')
+    setOldGoldAmount(bill.old_gold_amount ? String(bill.old_gold_amount) : '')
+    setOldSilverWeight(bill.old_silver_weight ? String(bill.old_silver_weight) : '')
+    setOldSilverAmount(bill.old_silver_amount ? String(bill.old_silver_amount) : '')
+    setLineItems(li.map((l: any) => ({
+      item_name: l.item_name,
+      weight: l.weight ? String(l.weight) : '',
+      amount: String(l.amount),
+      metal_type: l.metal_type,
+      purity: l.purity ?? '',
+      party: l.party === 'MNAP' ? 'MNAP' : 'custom',
+      party_custom: l.party !== 'MNAP' ? l.party : '',
+      order_in: !!l.order_in,
+    })))
+    setPayments(sp.map((p: any) => ({
+      payment_mode: p.payment_mode,
+      amount: String(p.amount),
+      cheque_number: p.cheque_number ?? '',
+      reference_serial: p.reference_serial ?? '',
+    })))
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null); setEditingBillNumber('')
+    setCustomerName(''); setBillNumber('')
+    setLineItems([defaultLine()]); setPayments([defaultPayment()])
+    setOldGoldWeight(''); setOldGoldAmount(''); setOldSilverWeight(''); setOldSilverAmount('')
+    setError('')
   }
 
   const totalBillAmount = lineItems.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0)
@@ -117,6 +175,62 @@ export default function SalesPage() {
     const firstItem = lineItems[0]
     const billParty = firstItem.party === 'MNAP' ? 'MNAP' : firstItem.party_custom
 
+    if (editingId) {
+      // Resubmit sent-back entry — update + replace children
+      const { error: billErr } = await supabase.from('sales_bills').update({
+        customer_name: customerName,
+        bill_number: editingBillNumber, // keep original bill number
+        metal_type: firstItem.metal_type,
+        purity: firstItem.purity || null,
+        party: billParty,
+        total_amount: totalBillAmount,
+        old_gold_weight: parseFloat(oldGoldWeight) || null,
+        old_gold_amount: parseFloat(oldGoldAmount) || null,
+        old_silver_weight: parseFloat(oldSilverWeight) || null,
+        old_silver_amount: parseFloat(oldSilverAmount) || null,
+        status: 'pending',
+        send_back_reason: null,
+        submitted_at: new Date().toISOString(),
+      }).eq('id', editingId)
+
+      if (billErr) { setError(billErr.message); setSubmitting(false); return }
+
+      // Replace line items and payments
+      await Promise.all([
+        supabase.from('sales_line_items').delete().eq('bill_id', editingId),
+        supabase.from('sales_payments').delete().eq('bill_id', editingId),
+      ])
+      await Promise.all([
+        supabase.from('sales_line_items').insert(
+          lineItems.map(l => ({
+            bill_id: editingId,
+            item_name: l.item_name,
+            weight: parseFloat(l.weight) || null,
+            amount: parseFloat(l.amount),
+            metal_type: l.metal_type,
+            purity: l.purity || null,
+            party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
+            order_in: l.order_in,
+          }))
+        ),
+        supabase.from('sales_payments').insert(
+          payments.map(p => ({
+            bill_id: editingId,
+            payment_mode: p.payment_mode,
+            amount: parseFloat(p.amount),
+            cheque_number: p.cheque_number || null,
+            reference_serial: p.reference_serial || null,
+          }))
+        ),
+      ])
+      setSuccess(true)
+      setSubmitting(false)
+      cancelEdit()
+      await loadSentBack(sessionId)
+      return
+    }
+
+    // New submission
     const { data: bill, error: billErr } = await supabase.from('sales_bills').insert({
       day_session_id: sessionId,
       bill_number: billPrefix() + billNumber,
@@ -178,14 +292,43 @@ export default function SalesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">New Sale — Module A</h1>
 
-      <Toast show={success} message="Bill submitted successfully and is pending admin review." />
+      <Toast show={success} message={editingId ? 'Bill resubmitted successfully and is pending admin review.' : 'Bill submitted successfully and is pending admin review.'} />
+
+      {/* Sent-back panel */}
+      {sentBackEntries.length > 0 && !editingId && (
+        <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-orange-800">↩ {sentBackEntries.length} bill{sentBackEntries.length > 1 ? 's' : ''} sent back for correction</p>
+          {sentBackEntries.map(bill => (
+            <div key={bill.id} className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-orange-900">Bill #{bill.bill_number} — {bill.customer_name} — ₹{bill.total_amount}</p>
+                {bill.send_back_reason && <p className="text-xs text-orange-700 mt-0.5">Admin note: {bill.send_back_reason}</p>}
+              </div>
+              <button onClick={() => loadForEdit(bill)}
+                className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                Load &amp; Fix
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editingId && (
+        <div className="bg-orange-50 border border-orange-300 rounded-xl px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-orange-800">✎ Editing Bill #{editingBillNumber} — bill number will be preserved</p>
+          <button onClick={cancelEdit} className="text-xs text-orange-600 hover:text-orange-800 font-medium">Cancel edit</button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Bill Header */}
         <Section title="Bill Details">
           <div className="grid grid-cols-2 gap-4">
             <Input label="Customer Name *" value={customerName} onChange={setCustomerName} required />
-            <Input label="Bill Number *" value={billNumber} onChange={setBillNumber} required />
+            {!editingId
+              ? <Input label="Bill Number *" value={billNumber} onChange={setBillNumber} required />
+              : <div><label className="label">Bill Number</label><p className="input bg-gray-50 text-gray-500 flex items-center">{editingBillNumber}</p></div>
+            }
           </div>
         </Section>
 
@@ -366,7 +509,7 @@ export default function SalesPage() {
 
         <button type="submit" disabled={submitting || paymentMismatch}
           className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-3 rounded-xl text-sm transition-colors">
-          {submitting ? 'Submitting…' : 'Submit Bill'}
+          {submitting ? 'Submitting…' : editingId ? 'Resubmit Bill' : 'Submit Bill'}
         </button>
       </form>
     </div>

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDateTime, PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 
-type FilterStatus = 'pending' | 'approved' | 'rejected' | 'all'
+type FilterStatus = 'pending' | 'approved' | 'rejected' | 'sent_back' | 'all'
 type FilterModule = 'all' | 'sales' | 'receipts' | 'expenses' | 'old_gold' | 'direct' | 'payments' | 'approvals'
 
 interface AuditEntry { field_name: string; original_value: string; edited_value: string; edit_reason: string; edited_at: string }
@@ -54,6 +54,7 @@ export default function QCPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<{ type: string; data: any } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [sendBackReason, setSendBackReason] = useState('')
   const [editReason, setEditReason] = useState('')
   const [editMode, setEditMode] = useState(false)
   const [editData, setEditData] = useState<any>(null)
@@ -129,6 +130,7 @@ export default function QCPage() {
 
   function closeModal() {
     setSelected(null); setEditMode(false); setEditData(null); setEditReason('')
+    setRejectReason(''); setSendBackReason('')
     setDailyRates(null); setSelectedDetail(null); setLoadingDetail(false)
   }
 
@@ -147,6 +149,17 @@ export default function QCPage() {
     await supabase.from(getTableName(type)).update({ status: 'rejected', rejection_reason: rejectReason }).eq('id', id)
     setMessage('Entry rejected.')
     setRejectReason('')
+    closeModal()
+    await fetchEntries()
+    setActionLoading(false)
+  }
+
+  async function handleSendBack(type: string, id: string) {
+    if (!sendBackReason.trim()) { setMessage('Please enter a reason for sending back.'); return }
+    setActionLoading(true)
+    await supabase.from(getTableName(type)).update({ status: 'sent_back', send_back_reason: sendBackReason }).eq('id', id)
+    setMessage('Entry sent back to staff for correction.')
+    setSendBackReason('')
     closeModal()
     await fetchEntries()
     setActionLoading(false)
@@ -211,7 +224,8 @@ export default function QCPage() {
 
       <div className="flex flex-wrap gap-3 bg-white rounded-xl border border-gray-200 p-4">
         <FilterGroup label="Status" value={filterStatus} onChange={v => setFilterStatus(v as FilterStatus)}
-          options={['pending', 'approved', 'rejected', 'all']} />
+          options={['pending', 'approved', 'rejected', 'sent_back', 'all']}
+          labels={{ sent_back: 'sent back' }} />
         <FilterGroup label="Module" value={filterModule} onChange={v => setFilterModule(v as FilterModule)}
           options={['all', 'sales', 'receipts', 'expenses', 'old_gold', 'direct', 'payments', 'approvals']}
           labels={{ old_gold: 'old gold' }} />
@@ -269,6 +283,11 @@ export default function QCPage() {
               {!editMode && selected.data.rejection_reason && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
                   Rejection reason: {selected.data.rejection_reason}
+                </div>
+              )}
+              {!editMode && selected.data.send_back_reason && (
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-orange-800 text-sm">
+                  ↩ Sent back for correction: {selected.data.send_back_reason}
                 </div>
               )}
 
@@ -335,6 +354,14 @@ export default function QCPage() {
                       className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-sm font-semibold py-2 rounded-lg">
                       ✎ Edit Entry
                     </button>
+                    <div className="space-y-2">
+                      <input value={sendBackReason} onChange={e => setSendBackReason(e.target.value)}
+                        placeholder="Reason for sending back (required)" className="input text-sm" />
+                      <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading || !sendBackReason.trim()}
+                        className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                        ↩ Send Back to Staff
+                      </button>
+                    </div>
                     <div className="space-y-2">
                       <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
                         placeholder="Rejection reason (required to reject)" className="input text-sm" />

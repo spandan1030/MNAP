@@ -11,13 +11,13 @@ export default async function StaffHome() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const [bills, receipts, expenses, ogPurchases, drReceipts, partyPayments, approvalSales] = await Promise.all([
-    supabase.from('sales_bills').select('id, bill_number, total_amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
-    supabase.from('money_receipts').select('id, receipt_type, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
-    supabase.from('expenses').select('id, description, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
-    supabase.from('old_gold_purchases').select('id, customer_name, total_amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
-    supabase.from('direct_receipts').select('id, customer_name, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
-    supabase.from('party_payments').select('id, party_name, amount, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
-    supabase.from('approval_sales').select('id, party_name, transaction_type, status, submitted_at').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('sales_bills').select('id, bill_number, total_amount, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('money_receipts').select('id, receipt_type, amount, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('expenses').select('id, description, amount, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('old_gold_purchases').select('id, customer_name, total_amount, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('direct_receipts').select('id, customer_name, amount, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('party_payments').select('id, party_name, amount, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
+    supabase.from('approval_sales').select('id, party_name, transaction_type, status, submitted_at, send_back_reason').eq('submitted_by', user!.id).order('submitted_at', { ascending: false }).limit(5),
   ])
 
   return (
@@ -32,6 +32,37 @@ export default async function StaffHome() {
           Day is not open yet. Please wait for admin to open the day before submitting entries.
         </div>
       )}
+
+      {/* Sent-back alert banner */}
+      {(() => {
+        const sentBack = [
+          ...(bills.data ?? []).filter((b: any) => b.status === 'sent_back').map((b: any) => ({ label: `Sale — Bill #${b.bill_number}`, reason: b.send_back_reason, href: '/staff/sales' })),
+          ...(receipts.data ?? []).filter((r: any) => r.status === 'sent_back').map((r: any) => ({ label: `Receipt — ${r.receipt_type}`, reason: r.send_back_reason, href: '/staff/receipts' })),
+          ...(expenses.data ?? []).filter((e: any) => e.status === 'sent_back').map((e: any) => ({ label: `Expense — ${e.description}`, reason: e.send_back_reason, href: '/staff/expenses' })),
+          ...(ogPurchases.data ?? []).filter((p: any) => p.status === 'sent_back').map((p: any) => ({ label: `Old Metal — ${p.customer_name}`, reason: p.send_back_reason, href: '/staff/old-gold-purchase' })),
+          ...(drReceipts.data ?? []).filter((r: any) => r.status === 'sent_back').map((r: any) => ({ label: `Direct Receipt — ${r.customer_name}`, reason: r.send_back_reason, href: '/staff/direct-receipt' })),
+          ...(partyPayments.data ?? []).filter((p: any) => p.status === 'sent_back').map((p: any) => ({ label: `Payment — ${p.party_name}`, reason: p.send_back_reason, href: '/staff/payments' })),
+          ...(approvalSales.data ?? []).filter((s: any) => s.status === 'sent_back').map((s: any) => ({ label: `Approval — ${s.party_name}`, reason: s.send_back_reason, href: '/staff/approval-sales' })),
+        ]
+        if (!sentBack.length) return null
+        return (
+          <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-semibold text-orange-800">↩ {sentBack.length} entr{sentBack.length === 1 ? 'y' : 'ies'} sent back for correction</p>
+            {sentBack.map((item, i) => (
+              <div key={i} className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-orange-900">{item.label}</p>
+                  {item.reason && <p className="text-xs text-orange-700 mt-0.5">Admin note: {item.reason}</p>}
+                </div>
+                <Link href={item.href}
+                  className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                  Fix &amp; Resubmit
+                </Link>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
 
       <div className="grid grid-cols-3 gap-3">
         <ActionCard href="/staff/sales" label="New Sale" icon="🏷️" />
@@ -84,6 +115,7 @@ const STATUS_COLORS: Record<string, string> = {
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   edited: 'bg-blue-100 text-blue-800',
+  sent_back: 'bg-orange-100 text-orange-800',
 }
 
 function RecentList({ title, items }: { title: string; items: { id: string; label: string; value: string; status: string; time: string }[] }) {

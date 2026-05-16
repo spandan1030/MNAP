@@ -18,9 +18,13 @@ export default function ReceiptsPage() {
   const supabase = createClient()
   const [receiptType, setReceiptType] = useState<ReceiptType>('advance')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  const [sentBackEntries, setSentBackEntries] = useState<any[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [serialNumber, setSerialNumber] = useState('')
   const [customerName, setCustomerName] = useState('')
@@ -49,19 +53,62 @@ export default function ReceiptsPage() {
 
   async function loadSession() {
     const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single()
-    setSessionId(data?.id ?? null)
+    const [{ data: sessionData }, { data: { user } }] = await Promise.all([
+      supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
+      supabase.auth.getUser(),
+    ])
+    const sid = sessionData?.id ?? null
+    setSessionId(sid)
+    setUserId(user?.id ?? null)
+    if (sid && user) await loadSentBack(sid, user.id)
   }
 
-  useEffect(() => { loadSession() }, []) // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
+  async function loadSentBack(sid: string, uid: string) {
+    const { data } = await supabase.from('money_receipts')
+      .select('id, receipt_type, serial_number, customer_name, repair_type, weight, amount, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount, payment_mode, cheque_number, reference_serial, notes, send_back_reason')
+      .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', uid)
+    setSentBackEntries(data ?? [])
+  }
 
-  function resetForm() {
+  function loadForEdit(entry: any) {
+    setReceiptType(entry.receipt_type as ReceiptType)
+    setSerialNumber(entry.serial_number ?? '')
+    setCustomerName(entry.customer_name ?? '')
+    setRepairType(entry.repair_type ?? '')
+    setRepairWeight(entry.weight?.toString() ?? '')
+    setTotalAmount(entry.amount?.toString() ?? '')
+    setOldGoldWeight(entry.old_gold_weight?.toString() ?? '')
+    setOldGoldAmount(entry.old_gold_amount?.toString() ?? '')
+    setOldSilverWeight(entry.old_silver_weight?.toString() ?? '')
+    setOldSilverAmount(entry.old_silver_amount?.toString() ?? '')
+    setPaymentMode(entry.payment_mode ?? 'cash')
+    const derived = Math.max(0, (entry.amount ?? 0) - (entry.old_gold_amount ?? 0) - (entry.old_silver_amount ?? 0))
+    setPaymentAmount(derived > 0 ? derived.toFixed(2) : '')
+    setChequeNumber(entry.cheque_number ?? '')
+    setReferenceSerial(entry.reference_serial ?? '')
+    setNotes(entry.notes ?? '')
+    setEditingId(entry.id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    clearFields()
+  }
+
+  function clearFields() {
     setSerialNumber(''); setCustomerName(''); setRepairType(''); setRepairWeight('')
     setTotalAmount(''); setOldGoldWeight(''); setOldGoldAmount('')
     setOldSilverWeight(''); setOldSilverAmount('')
     setPaymentMode('cash'); setPaymentAmount(''); setChequeNumber(''); setReferenceSerial(''); setNotes('')
+  }
+
+  function resetForm() {
+    clearFields()
     setTimeout(() => setSuccess(false), 3000)
   }
+
+  useEffect(() => { loadSession() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -79,10 +126,8 @@ export default function ReceiptsPage() {
     }
 
     setSubmitting(true)
-    const { data: { user } } = await supabase.auth.getUser()
 
-    const { error: err } = await supabase.from('money_receipts').insert({
-      day_session_id: sessionId,
+    const payload: Record<string, unknown> = {
       receipt_type: receiptType,
       serial_number: (receiptType === 'advance' || receiptType === 'sip') ? serialNumber : null,
       customer_name: customerName,
@@ -97,6 +142,29 @@ export default function ReceiptsPage() {
       cheque_number: paymentMode === 'cheque' && !fullyByMetal ? chequeNumber : null,
       reference_serial: (paymentMode === 'advance_adjustment' || paymentMode === 'sip_adjustment') && !fullyByMetal ? referenceSerial : null,
       notes: notes || null,
+    }
+
+    if (editingId) {
+      const { error: err } = await supabase.from('money_receipts').update({
+        ...payload,
+        status: 'pending',
+        send_back_reason: null,
+        submitted_at: new Date().toISOString(),
+      }).eq('id', editingId)
+      if (err) { setError(err.message) } else {
+        setSuccess(true)
+        setEditingId(null)
+        await loadSentBack(sessionId, userId!)
+        resetForm()
+      }
+      setSubmitting(false)
+      return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: err } = await supabase.from('money_receipts').insert({
+      ...payload,
+      day_session_id: sessionId,
       submitted_by: user!.id,
     })
 
@@ -111,7 +179,34 @@ export default function ReceiptsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Money Receipt — Module B</h1>
 
-      <Toast show={success} message="Receipt submitted and pending admin review." />
+      <Toast show={success} message={editingId ? 'Receipt resubmitted for admin review.' : 'Receipt submitted and pending admin review.'} />
+
+      {/* Sent-back panel */}
+      {sentBackEntries.length > 0 && (
+        <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-orange-800">↩ {sentBackEntries.length} receipt{sentBackEntries.length > 1 ? 's' : ''} sent back for correction</p>
+          {sentBackEntries.map(entry => (
+            <div key={entry.id} className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-orange-900">{RECEIPT_LABELS[entry.receipt_type as ReceiptType] ?? entry.receipt_type} — {entry.customer_name} — ₹{entry.amount}</p>
+                {entry.send_back_reason && <p className="text-xs text-orange-700 mt-0.5">Admin note: {entry.send_back_reason}</p>}
+              </div>
+              <button type="button" onClick={() => loadForEdit(entry)}
+                className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                Load &amp; Fix
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edit mode banner */}
+      {editingId && (
+        <div className="bg-amber-50 border border-amber-400 rounded-xl px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-amber-800">✏️ Editing sent-back receipt — fix and resubmit</p>
+          <button type="button" onClick={cancelEdit} className="text-xs text-amber-700 underline">Cancel edit</button>
+        </div>
+      )}
 
       {/* Receipt Type */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -251,7 +346,7 @@ export default function ReceiptsPage() {
           disabled={submitting || (!fullyByMetal && amountMismatch) || (!fullyByMetal && total > 0 && paidViaMode <= 0)}
           className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
         >
-          {submitting ? 'Submitting…' : 'Submit Receipt'}
+          {submitting ? 'Submitting…' : editingId ? 'Resubmit Receipt' : 'Submit Receipt'}
         </button>
       </form>
     </div>

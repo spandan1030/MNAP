@@ -20,28 +20,75 @@ const defaultLine = (): LineItem => ({
   party: 'MNAP', party_custom: '', weight: '', notes: '',
 })
 
+const TX_LABELS: Record<string, string> = {
+  approval: 'Approval',
+  sale: 'Sale',
+  approval_return: 'Approval Return',
+  stock_in: 'Stock In',
+}
+
 export default function ApprovalSalesPage() {
   const supabase = createClient()
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [items, setItems] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
+  const [sentBackEntries, setSentBackEntries] = useState<any[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
+
   const [partyName, setPartyName] = useState('')
   const [transactionType, setTransactionType] = useState<'sale' | 'approval' | 'approval_return' | 'stock_in'>('approval')
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => { loadData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
     const today = new Date().toISOString().split('T')[0]
-    const [sessionRes, itemsRes] = await Promise.all([
+    const [sessionRes, itemsRes, { data: { user } }] = await Promise.all([
       supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
       supabase.from('item_master').select('name').eq('is_active', true).order('name'),
+      supabase.auth.getUser(),
     ])
-    setSessionId(sessionRes.data?.id ?? null)
+    const sid = sessionRes.data?.id ?? null
+    setSessionId(sid)
+    setUserId(user?.id ?? null)
     setItems((itemsRes.data ?? []).map((i: { name: string }) => i.name))
+    if (sid && user) await loadSentBack(sid, user.id)
+  }
+
+  async function loadSentBack(sid: string, uid: string) {
+    const { data } = await supabase.from('approval_sales')
+      .select('id, party_name, transaction_type, send_back_reason')
+      .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', uid)
+    setSentBackEntries(data ?? [])
+  }
+
+  async function loadForEdit(entry: any) {
+    const { data: saleItems } = await supabase.from('approval_sale_items')
+      .select('item_name, metal_type, purity, party, weight, notes')
+      .eq('sale_id', entry.id)
+
+    setPartyName(entry.party_name ?? '')
+    setTransactionType(entry.transaction_type ?? 'approval')
+    setLineItems((saleItems ?? []).map((item: any) => ({
+      item_name: item.item_name ?? '',
+      metal_type: item.metal_type ?? 'gold',
+      purity: item.purity ?? '',
+      party: item.party === 'MNAP' ? 'MNAP' : 'custom',
+      party_custom: item.party === 'MNAP' ? '' : (item.party ?? ''),
+      weight: item.weight?.toString() ?? '',
+      notes: item.notes ?? '',
+    })))
+    setEditingId(entry.id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setPartyName(''); setTransactionType('approval'); setLineItems([defaultLine()])
   }
 
   function updateLine(i: number, field: keyof LineItem, val: string) {
@@ -64,6 +111,43 @@ export default function ApprovalSalesPage() {
     if (lineItems.some(l => l.party === 'custom' && !l.party_custom.trim())) { setError('Enter party name for outside party items.'); return }
 
     setSubmitting(true)
+
+    const itemPayload = lineItems.map(l => ({
+      item_name: l.item_name,
+      metal_type: l.metal_type,
+      purity: l.purity || null,
+      party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
+      weight: parseFloat(l.weight) || null,
+      notes: l.notes || null,
+    }))
+
+    if (editingId) {
+      const { error: saleErr } = await supabase.from('approval_sales').update({
+        party_name: partyName,
+        transaction_type: transactionType,
+        status: 'pending',
+        send_back_reason: null,
+        submitted_at: new Date().toISOString(),
+      }).eq('id', editingId)
+
+      if (saleErr) { setError(saleErr.message); setSubmitting(false); return }
+
+      // DELETE old items then INSERT new ones
+      await supabase.from('approval_sale_items').delete().eq('sale_id', editingId)
+      const { error: itemsErr } = await supabase.from('approval_sale_items').insert(
+        itemPayload.map(item => ({ ...item, sale_id: editingId }))
+      )
+
+      if (itemsErr) { setError('Entry updated but items failed: ' + itemsErr.message); setSubmitting(false); return }
+
+      setSuccess(true)
+      setEditingId(null)
+      await loadSentBack(sessionId, userId!)
+      resetForm()
+      setSubmitting(false)
+      return
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
 
     const { data: sale, error: saleErr } = await supabase.from('approval_sales').insert({
@@ -76,15 +160,7 @@ export default function ApprovalSalesPage() {
     if (saleErr || !sale) { setError(saleErr?.message ?? 'Failed to save entry.'); setSubmitting(false); return }
 
     const { error: itemsErr } = await supabase.from('approval_sale_items').insert(
-      lineItems.map(l => ({
-        sale_id: sale.id,
-        item_name: l.item_name,
-        metal_type: l.metal_type,
-        purity: l.purity || null,
-        party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
-        weight: parseFloat(l.weight) || null,
-        notes: l.notes || null,
-      }))
+      itemPayload.map(item => ({ ...item, sale_id: sale.id }))
     )
 
     if (itemsErr) { setError('Entry saved but items failed: ' + itemsErr.message); setSubmitting(false); return }
@@ -106,7 +182,34 @@ export default function ApprovalSalesPage() {
         <p className="text-sm text-gray-500 mt-1">Record items given on approval or sold to a party with no cash exchange.</p>
       </div>
 
-      <Toast show={success} message="Entry submitted successfully and is pending admin review." />
+      <Toast show={success} message={editingId ? 'Entry resubmitted for admin review.' : 'Entry submitted successfully and is pending admin review.'} />
+
+      {/* Sent-back panel */}
+      {sentBackEntries.length > 0 && (
+        <div className="bg-orange-50 border border-orange-300 rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-orange-800">↩ {sentBackEntries.length} entr{sentBackEntries.length > 1 ? 'ies' : 'y'} sent back for correction</p>
+          {sentBackEntries.map(entry => (
+            <div key={entry.id} className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-orange-900">{entry.party_name} — {TX_LABELS[entry.transaction_type] ?? entry.transaction_type}</p>
+                {entry.send_back_reason && <p className="text-xs text-orange-700 mt-0.5">Admin note: {entry.send_back_reason}</p>}
+              </div>
+              <button type="button" onClick={() => loadForEdit(entry)}
+                className="flex-shrink-0 bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+                Load &amp; Fix
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edit mode banner */}
+      {editingId && (
+        <div className="bg-amber-50 border border-amber-400 rounded-xl px-4 py-3 flex items-center justify-between">
+          <p className="text-sm font-semibold text-amber-800">✏️ Editing sent-back entry — fix and resubmit</p>
+          <button type="button" onClick={cancelEdit} className="text-xs text-amber-700 underline">Cancel edit</button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Header */}
@@ -170,7 +273,7 @@ export default function ApprovalSalesPage() {
                   )}
                 </div>
 
-                {/* Row 2: item name, weight, remove */}
+                {/* Row 2: item name, weight, notes, remove */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-5">
                     <label className="label">Item Name *</label>
@@ -212,7 +315,7 @@ export default function ApprovalSalesPage() {
 
         <button type="submit" disabled={submitting}
           className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-3 rounded-xl text-sm transition-colors">
-          {submitting ? 'Submitting…' : 'Submit Entry'}
+          {submitting ? 'Submitting…' : editingId ? 'Resubmit Entry' : 'Submit Entry'}
         </button>
       </form>
     </div>
