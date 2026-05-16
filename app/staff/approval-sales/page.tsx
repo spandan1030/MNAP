@@ -2,13 +2,39 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { PURITY_OPTIONS } from '@/lib/utils'
 import { Toast } from '@/components/ui/Toast'
+
+// ── Purity → metal mapping (same as Module A / New Sale) ──────────────────
+const PURITY_LIST = ['18K', '22K', '24K', 'Diamond', '75', '925', 'Other'] as const
+type PurityChoice = typeof PURITY_LIST[number]
+const KNOWN_PURITIES = PURITY_LIST.filter(p => p !== 'Other')
+
+type MetalType = 'gold' | 'silver' | 'diamond' | 'other'
+
+function metalForPurity(purity: string): MetalType {
+  if (purity === '18K' || purity === '22K' || purity === '24K') return 'gold'
+  if (purity === 'Diamond') return 'diamond'
+  if (purity === '75' || purity === '925') return 'silver'
+  return 'other'
+}
+
+const METAL_LABELS: Record<MetalType, string> = {
+  gold: 'Gold', silver: 'Silver', diamond: 'Diamond', other: 'Other',
+}
+
+const METAL_COLORS: Record<MetalType, string> = {
+  gold: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+  silver: 'text-gray-600 bg-gray-100 border-gray-200',
+  diamond: 'text-sky-700 bg-sky-50 border-sky-200',
+  other: 'text-purple-700 bg-purple-50 border-purple-200',
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface LineItem {
   item_name: string
-  metal_type: 'gold' | 'silver' | 'other'
-  purity: string
+  metal_type: MetalType      // auto-derived from purity_choice
+  purity_choice: string      // one of PURITY_LIST
+  purity_custom: string      // free text when purity_choice === 'Other'
   party: string
   party_custom: string
   weight: string
@@ -16,8 +42,12 @@ interface LineItem {
 }
 
 const defaultLine = (): LineItem => ({
-  item_name: '', metal_type: 'gold', purity: '22K',
-  party: 'MNAP', party_custom: '', weight: '', notes: '',
+  item_name: '',
+  metal_type: 'gold',
+  purity_choice: '22K',
+  purity_custom: '',
+  party: 'MNAP', party_custom: '',
+  weight: '', notes: '',
 })
 
 const TX_LABELS: Record<string, string> = {
@@ -73,15 +103,19 @@ export default function ApprovalSalesPage() {
 
     setPartyName(entry.party_name ?? '')
     setTransactionType(entry.transaction_type ?? 'approval')
-    setLineItems((saleItems ?? []).map((item: any) => ({
-      item_name: item.item_name ?? '',
-      metal_type: item.metal_type ?? 'gold',
-      purity: item.purity ?? '',
-      party: item.party === 'MNAP' ? 'MNAP' : 'custom',
-      party_custom: item.party === 'MNAP' ? '' : (item.party ?? ''),
-      weight: item.weight?.toString() ?? '',
-      notes: item.notes ?? '',
-    })))
+    setLineItems((saleItems ?? []).map((item: any) => {
+      const pc = KNOWN_PURITIES.includes(item.purity) ? item.purity : 'Other'
+      return {
+        item_name: item.item_name ?? '',
+        metal_type: metalForPurity(pc === 'Other' ? 'other' : pc),
+        purity_choice: pc,
+        purity_custom: pc === 'Other' ? (item.purity ?? '') : '',
+        party: item.party === 'MNAP' ? 'MNAP' : 'custom',
+        party_custom: item.party === 'MNAP' ? '' : (item.party ?? ''),
+        weight: item.weight?.toString() ?? '',
+        notes: item.notes ?? '',
+      }
+    }))
     setEditingId(entry.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -95,12 +129,18 @@ export default function ApprovalSalesPage() {
     setLineItems(prev => prev.map((l, idx) => {
       if (idx !== i) return l
       const updated = { ...l, [field]: val }
-      if (field === 'metal_type') {
-        const purities = PURITY_OPTIONS[val] ?? []
-        updated.purity = purities.length > 0 ? purities[0] : ''
+      if (field === 'purity_choice') {
+        updated.metal_type = metalForPurity(val === 'Other' ? 'other' : val)
+        if (val !== 'Other') updated.purity_custom = ''
       }
       return updated
     }))
+  }
+
+  // Resolve final purity string to store in DB
+  function resolvedPurity(l: LineItem): string | null {
+    if (l.purity_choice === 'Other') return l.purity_custom.trim() || null
+    return l.purity_choice
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -115,7 +155,7 @@ export default function ApprovalSalesPage() {
     const itemPayload = lineItems.map(l => ({
       item_name: l.item_name,
       metal_type: l.metal_type,
-      purity: l.purity || null,
+      purity: resolvedPurity(l),
       party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
       weight: parseFloat(l.weight) || null,
       notes: l.notes || null,
@@ -132,7 +172,6 @@ export default function ApprovalSalesPage() {
 
       if (saleErr) { setError(saleErr.message); setSubmitting(false); return }
 
-      // DELETE old items then INSERT new ones
       await supabase.from('approval_sale_items').delete().eq('sale_id', editingId)
       const { error: itemsErr } = await supabase.from('approval_sale_items').insert(
         itemPayload.map(item => ({ ...item, sale_id: editingId }))
@@ -178,8 +217,8 @@ export default function ApprovalSalesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Approval / Other Party Sale — Module H</h1>
-        <p className="text-sm text-gray-500 mt-1">Record items given on approval or sold to a party with no cash exchange.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Approval / Party Sale / Stock In — Module H</h1>
+        <p className="text-sm text-gray-500 mt-1">Record items given on approval, sold to a party, returned, or stocked in.</p>
       </div>
 
       <Toast show={success} message={editingId ? 'Entry resubmitted for admin review.' : 'Entry submitted successfully and is pending admin review.'} />
@@ -239,31 +278,41 @@ export default function ApprovalSalesPage() {
           <div className="space-y-4">
             {lineItems.map((l, i) => (
               <div key={i} className="border border-gray-100 rounded-lg p-3 space-y-2 bg-gray-50">
-                {/* Row 1: metal, purity, party */}
+
+                {/* Row 1: Purity (→ metal badge auto-shows) | Custom purity | Party | Party name */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-3">
-                    <label className="label">Metal</label>
-                    <select value={l.metal_type} onChange={e => updateLine(i, 'metal_type', e.target.value)} className="input">
-                      <option value="gold">Gold</option>
-                      <option value="silver">Silver</option>
-                      <option value="other">Other</option>
+                    <label className="label flex items-center gap-1.5">
+                      Purity *
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${METAL_COLORS[l.metal_type]}`}>
+                        {METAL_LABELS[l.metal_type]}
+                      </span>
+                    </label>
+                    <select value={l.purity_choice}
+                      onChange={e => updateLine(i, 'purity_choice', e.target.value)}
+                      className="input">
+                      {PURITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
-                  {l.metal_type !== 'other' && (
+
+                  {l.purity_choice === 'Other' && (
                     <div className="col-span-3">
-                      <label className="label">Purity</label>
-                      <select value={l.purity} onChange={e => updateLine(i, 'purity', e.target.value)} className="input">
-                        {(PURITY_OPTIONS[l.metal_type] ?? []).map(p => <option key={p}>{p}</option>)}
-                      </select>
+                      <label className="label">Custom Purity</label>
+                      <input value={l.purity_custom}
+                        onChange={e => updateLine(i, 'purity_custom', e.target.value)}
+                        placeholder="e.g. 916, Platinum…"
+                        className="input" />
                     </div>
                   )}
-                  <div className={l.metal_type !== 'other' ? 'col-span-3' : 'col-span-6'}>
+
+                  <div className={l.purity_choice === 'Other' ? 'col-span-3' : 'col-span-6'}>
                     <label className="label">Party</label>
                     <select value={l.party} onChange={e => updateLine(i, 'party', e.target.value)} className="input">
                       <option value="MNAP">MNAP (Own Stock)</option>
                       <option value="custom">Outside Party</option>
                     </select>
                   </div>
+
                   {l.party === 'custom' && (
                     <div className="col-span-3">
                       <label className="label">Party Name *</label>
@@ -275,7 +324,7 @@ export default function ApprovalSalesPage() {
 
                 {/* Row 2: item name, weight, notes, remove */}
                 <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-5">
+                  <div className="col-span-12 sm:col-span-5">
                     <label className="label">Item Name *</label>
                     <input list={`item-list-${i}`} value={l.item_name}
                       onChange={e => updateLine(i, 'item_name', e.target.value)}
@@ -284,13 +333,15 @@ export default function ApprovalSalesPage() {
                       {items.map(it => <option key={it} value={it} />)}
                     </datalist>
                   </div>
-                  <div className="col-span-3">
-                    <label className="label">Weight (g)</label>
+                  <div className="col-span-5 sm:col-span-3">
+                    <label className="label">
+                      Weight {l.metal_type === 'diamond' ? '(ct)' : '(g)'}
+                    </label>
                     <input type="number" step="0.001" min="0" value={l.weight}
                       onChange={e => updateLine(i, 'weight', e.target.value)}
                       placeholder="0.000" className="input" />
                   </div>
-                  <div className="col-span-3">
+                  <div className="col-span-6 sm:col-span-3">
                     <label className="label">Notes</label>
                     <input value={l.notes} onChange={e => updateLine(i, 'notes', e.target.value)}
                       placeholder="Optional" className="input" />
@@ -302,6 +353,7 @@ export default function ApprovalSalesPage() {
                     )}
                   </div>
                 </div>
+
               </div>
             ))}
           </div>
