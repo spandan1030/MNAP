@@ -370,16 +370,17 @@ export default function SalesPage() {
                 {/* Row 1: Purity | Custom purity | Party | Party name */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-3">
-                    <label className="label">Purity *</label>
+                    <label className="label flex items-center gap-1.5">
+                      Purity *
+                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full border ${METAL_COLORS[l.metal_type]}`}>
+                        {METAL_LABELS[l.metal_type]}
+                      </span>
+                    </label>
                     <select value={l.purity_choice}
                       onChange={e => updateLine(i, 'purity_choice', e.target.value)}
                       className="input">
                       {PURITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
-                    {/* Derived metal badge */}
-                    <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full border ${METAL_COLORS[l.metal_type]}`}>
-                      {METAL_LABELS[l.metal_type]}
-                    </span>
                   </div>
 
                   {l.purity_choice === 'Other' && (
