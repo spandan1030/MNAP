@@ -155,9 +155,8 @@ export default function QCPage() {
   }
 
   async function handleSendBack(type: string, id: string) {
-    if (!sendBackReason.trim()) { setMessage('Please enter a reason for sending back.'); return }
     setActionLoading(true)
-    await supabase.from(getTableName(type)).update({ status: 'sent_back', send_back_reason: sendBackReason }).eq('id', id)
+    await supabase.from(getTableName(type)).update({ status: 'sent_back', send_back_reason: sendBackReason.trim() || null }).eq('id', id)
     setMessage('Entry sent back to staff for correction.')
     setSendBackReason('')
     closeModal()
@@ -356,8 +355,8 @@ export default function QCPage() {
                     </button>
                     <div className="space-y-2">
                       <input value={sendBackReason} onChange={e => setSendBackReason(e.target.value)}
-                        placeholder="Reason for sending back (required)" className="input text-sm" />
-                      <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading || !sendBackReason.trim()}
+                        placeholder="Reason for sending back (optional)" className="input text-sm" />
+                      <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading}
                         className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
                         ↩ Send Back to Staff
                       </button>
