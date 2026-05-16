@@ -68,10 +68,10 @@ export default async function StaffHome() {
         <ActionCard href="/staff/sales" label="New Sale" icon="🏷️" />
         <ActionCard href="/staff/receipts" label="Money Receipt" icon="💰" />
         <ActionCard href="/staff/expenses" label="Expense" icon="📋" />
-        <ActionCard href="/staff/old-gold-purchase" label="Old Gold" icon="🥇" />
+        <ActionCard href="/staff/old-gold-purchase" label="Old Metal Purchase" icon="🥇" />
         <ActionCard href="/staff/direct-receipt" label="Direct Receipt" icon="📥" />
         <ActionCard href="/staff/payments" label="Payment" icon="💸" />
-        <ActionCard href="/staff/approval-sales" label="Approval" icon="🤝" />
+        <ActionCard href="/staff/approval-sales" label="Approval/Party Sale/Stock In" icon="🤝" />
       </div>
 
       <div className="space-y-4">
