@@ -179,7 +179,7 @@ export default function ReportsPage() {
     heading('Section 1 — Sales Register')
     const salesRows = data.bills.flatMap((b: any) =>
       (b.sales_line_items ?? []).map((l: any, i: number) => [
-        i === 0 ? b.customer_name : '', l.order_in ? `★ ${l.item_name}` : l.item_name,
+        i === 0 ? b.customer_name : '', l.order_in ? `* ${l.item_name}` : l.item_name,
         l.metal_type, l.purity ?? '—', l.party ?? '—',
         l.weight ? `${l.weight}g` : '—', pdfAmt(l.amount),
         i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
@@ -195,7 +195,7 @@ export default function ReportsPage() {
       y = (doc as any).lastAutoTable.finalY + 4
       if (hasOrderIn) {
         doc.setFontSize(7); doc.setFont('helvetica', 'italic')
-        doc.text('★ Items marked Order In — must be updated in Order Stock', 14, y)
+        doc.text('* Items marked Order In - must be updated in Order Stock', 14, y)
         y += 6
       }
       y += 2
