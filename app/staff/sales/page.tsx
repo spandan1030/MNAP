@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { PURITY_OPTIONS, PAYMENT_MODE_LABELS } from '@/lib/utils'
+import { PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { Toast } from '@/components/ui/Toast'
 
 function billPrefix() {
@@ -11,13 +11,42 @@ function billPrefix() {
   return `${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}-`
 }
 
+// Purity → metal mapping (purity is selected first; metal is derived)
+const PURITY_LIST = ['18K', '22K', '24K', 'Diamond', '75', '925', 'Other'] as const
+type PurityChoice = typeof PURITY_LIST[number]
+const KNOWN_PURITIES = PURITY_LIST.filter(p => p !== 'Other')
+
+type MetalType = 'gold' | 'silver' | 'diamond' | 'other'
+
+function metalForPurity(purity: string): MetalType {
+  if (purity === '18K' || purity === '22K' || purity === '24K') return 'gold'
+  if (purity === 'Diamond') return 'diamond'
+  if (purity === '75' || purity === '925') return 'silver'
+  return 'other'
+}
+
+const METAL_LABELS: Record<MetalType, string> = {
+  gold: 'Gold',
+  silver: 'Silver',
+  diamond: 'Diamond',
+  other: 'Other',
+}
+
+const METAL_COLORS: Record<MetalType, string> = {
+  gold: 'text-yellow-700 bg-yellow-50 border-yellow-200',
+  silver: 'text-gray-600 bg-gray-100 border-gray-200',
+  diamond: 'text-sky-700 bg-sky-50 border-sky-200',
+  other: 'text-purple-700 bg-purple-50 border-purple-200',
+}
+
 interface LineItem {
   item_name: string
   weight: string
   amount: string
-  metal_type: 'gold' | 'silver' | 'other'
-  purity: string
-  party: string        // 'MNAP' or 'custom'
+  metal_type: MetalType      // auto-derived from purity_choice
+  purity_choice: string      // one of PURITY_LIST
+  purity_custom: string      // free text when purity_choice === 'Other'
+  party: string              // 'MNAP' or 'custom'
   party_custom: string
   order_in: boolean
 }
@@ -31,7 +60,9 @@ interface Payment {
 
 const defaultLine = (): LineItem => ({
   item_name: '', weight: '', amount: '',
-  metal_type: 'gold', purity: '22K',
+  metal_type: 'gold',
+  purity_choice: '22K',
+  purity_custom: '',
   party: 'MNAP', party_custom: '',
   order_in: false,
 })
@@ -63,7 +94,7 @@ export default function SalesPage() {
   const [oldSilverWeight, setOldSilverWeight] = useState('')
   const [oldSilverAmount, setOldSilverAmount] = useState('')
 
-  useEffect(() => { loadItemsAndSession() }, [])
+  useEffect(() => { loadItemsAndSession() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadItemsAndSession() {
     const today = new Date().toISOString().split('T')[0]
@@ -101,16 +132,20 @@ export default function SalesPage() {
     setOldGoldAmount(bill.old_gold_amount ? String(bill.old_gold_amount) : '')
     setOldSilverWeight(bill.old_silver_weight ? String(bill.old_silver_weight) : '')
     setOldSilverAmount(bill.old_silver_amount ? String(bill.old_silver_amount) : '')
-    setLineItems(li.map((l: any) => ({
-      item_name: l.item_name,
-      weight: l.weight ? String(l.weight) : '',
-      amount: String(l.amount),
-      metal_type: l.metal_type,
-      purity: l.purity ?? '',
-      party: l.party === 'MNAP' ? 'MNAP' : 'custom',
-      party_custom: l.party !== 'MNAP' ? l.party : '',
-      order_in: !!l.order_in,
-    })))
+    setLineItems(li.map((l: any) => {
+      const pc = KNOWN_PURITIES.includes(l.purity) ? l.purity : 'Other'
+      return {
+        item_name: l.item_name,
+        weight: l.weight ? String(l.weight) : '',
+        amount: String(l.amount),
+        metal_type: metalForPurity(pc === 'Other' ? 'other' : pc),
+        purity_choice: pc,
+        purity_custom: pc === 'Other' ? (l.purity ?? '') : '',
+        party: l.party === 'MNAP' ? 'MNAP' : 'custom',
+        party_custom: l.party !== 'MNAP' ? l.party : '',
+        order_in: !!l.order_in,
+      }
+    }))
     setPayments(sp.map((p: any) => ({
       payment_mode: p.payment_mode,
       amount: String(p.amount),
@@ -135,13 +170,13 @@ export default function SalesPage() {
   const amountDueFromPayments = totalBillAmount - oldGoldAmt - oldSilverAmt
   const paymentMismatch = Math.abs(amountDueFromPayments - totalPayments) > 0.01
 
-  function updateLine(i: number, field: keyof LineItem, val: string) {
+  function updateLine(i: number, field: keyof LineItem, val: string | boolean) {
     setLineItems(prev => prev.map((l, idx) => {
       if (idx !== i) return l
       const updated = { ...l, [field]: val }
-      if (field === 'metal_type') {
-        const purities = PURITY_OPTIONS[val] ?? []
-        updated.purity = purities.length > 0 ? purities[0] : ''
+      if (field === 'purity_choice') {
+        updated.metal_type = metalForPurity(val === 'Other' ? 'other' : val as string)
+        if (val !== 'Other') updated.purity_custom = ''
       }
       return updated
     }))
@@ -159,6 +194,12 @@ export default function SalesPage() {
     setPayments(prev => prev.filter((_, idx) => idx !== i))
   }
 
+  // Resolve final purity string to store in DB
+  function resolvedPurity(l: LineItem): string | null {
+    if (l.purity_choice === 'Other') return l.purity_custom.trim() || null
+    return l.purity_choice
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
@@ -166,7 +207,9 @@ export default function SalesPage() {
     if (!sessionId) { setError('No open day session. Ask admin to open the day first.'); return }
     if (paymentMismatch) { setError('Payment amounts must equal the total bill amount (after old metal exchange).'); return }
     if (lineItems.some(l => !l.item_name || !l.amount)) { setError('All line items need an item name and amount.'); return }
-    if (lineItems.some(l => l.metal_type !== 'other' && !l.weight)) { setError('Weight is required for Gold/Silver items.'); return }
+    if (lineItems.some(l => (l.metal_type === 'gold' || l.metal_type === 'silver') && !l.weight)) {
+      setError('Weight is required for Gold/Silver items.'); return
+    }
     if (lineItems.some(l => l.party === 'custom' && !l.party_custom.trim())) { setError('Enter party name for outside party items.'); return }
 
     setSubmitting(true)
@@ -175,19 +218,40 @@ export default function SalesPage() {
     const firstItem = lineItems[0]
     const billParty = firstItem.party === 'MNAP' ? 'MNAP' : firstItem.party_custom
 
+    const lineItemsPayload = lineItems.map(l => ({
+      item_name: l.item_name,
+      weight: parseFloat(l.weight) || null,
+      amount: parseFloat(l.amount),
+      metal_type: l.metal_type,
+      purity: resolvedPurity(l),
+      party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
+      order_in: l.order_in,
+    }))
+
+    const paymentsPayload = payments.map(p => ({
+      payment_mode: p.payment_mode,
+      amount: parseFloat(p.amount),
+      cheque_number: p.cheque_number || null,
+      reference_serial: p.reference_serial || null,
+    }))
+
+    const billFields = {
+      customer_name: customerName,
+      metal_type: firstItem.metal_type,
+      purity: resolvedPurity(firstItem),
+      party: billParty,
+      total_amount: totalBillAmount,
+      old_gold_weight: parseFloat(oldGoldWeight) || null,
+      old_gold_amount: parseFloat(oldGoldAmount) || null,
+      old_silver_weight: parseFloat(oldSilverWeight) || null,
+      old_silver_amount: parseFloat(oldSilverAmount) || null,
+    }
+
     if (editingId) {
       // Resubmit sent-back entry — update + replace children
       const { error: billErr } = await supabase.from('sales_bills').update({
-        customer_name: customerName,
-        bill_number: editingBillNumber, // keep original bill number
-        metal_type: firstItem.metal_type,
-        purity: firstItem.purity || null,
-        party: billParty,
-        total_amount: totalBillAmount,
-        old_gold_weight: parseFloat(oldGoldWeight) || null,
-        old_gold_amount: parseFloat(oldGoldAmount) || null,
-        old_silver_weight: parseFloat(oldSilverWeight) || null,
-        old_silver_amount: parseFloat(oldSilverAmount) || null,
+        ...billFields,
+        bill_number: editingBillNumber,
         status: 'pending',
         send_back_reason: null,
         submitted_at: new Date().toISOString(),
@@ -195,33 +259,13 @@ export default function SalesPage() {
 
       if (billErr) { setError(billErr.message); setSubmitting(false); return }
 
-      // Replace line items and payments
       await Promise.all([
         supabase.from('sales_line_items').delete().eq('bill_id', editingId),
         supabase.from('sales_payments').delete().eq('bill_id', editingId),
       ])
       await Promise.all([
-        supabase.from('sales_line_items').insert(
-          lineItems.map(l => ({
-            bill_id: editingId,
-            item_name: l.item_name,
-            weight: parseFloat(l.weight) || null,
-            amount: parseFloat(l.amount),
-            metal_type: l.metal_type,
-            purity: l.purity || null,
-            party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
-            order_in: l.order_in,
-          }))
-        ),
-        supabase.from('sales_payments').insert(
-          payments.map(p => ({
-            bill_id: editingId,
-            payment_mode: p.payment_mode,
-            amount: parseFloat(p.amount),
-            cheque_number: p.cheque_number || null,
-            reference_serial: p.reference_serial || null,
-          }))
-        ),
+        supabase.from('sales_line_items').insert(lineItemsPayload.map(l => ({ ...l, bill_id: editingId }))),
+        supabase.from('sales_payments').insert(paymentsPayload.map(p => ({ ...p, bill_id: editingId }))),
       ])
       setSuccess(true)
       setSubmitting(false)
@@ -232,45 +276,18 @@ export default function SalesPage() {
 
     // New submission
     const { data: bill, error: billErr } = await supabase.from('sales_bills').insert({
+      ...billFields,
       day_session_id: sessionId,
       bill_number: billPrefix() + billNumber,
-      customer_name: customerName,
       customer_phone: null,
-      metal_type: firstItem.metal_type,
-      purity: firstItem.purity || null,
-      party: billParty,
-      total_amount: totalBillAmount,
-      old_gold_weight: parseFloat(oldGoldWeight) || null,
-      old_gold_amount: parseFloat(oldGoldAmount) || null,
-      old_silver_weight: parseFloat(oldSilverWeight) || null,
-      old_silver_amount: parseFloat(oldSilverAmount) || null,
       submitted_by: user!.id,
     }).select('id').single()
 
     if (billErr || !bill) { setError(billErr?.message ?? 'Failed to save bill.'); setSubmitting(false); return }
 
     const [itemsRes, paymentsRes] = await Promise.all([
-      supabase.from('sales_line_items').insert(
-        lineItems.map(l => ({
-          bill_id: bill.id,
-          item_name: l.item_name,
-          weight: parseFloat(l.weight) || null,
-          amount: parseFloat(l.amount),
-          metal_type: l.metal_type,
-          purity: l.purity || null,
-          party: l.party === 'MNAP' ? 'MNAP' : l.party_custom,
-          order_in: l.order_in,
-        }))
-      ),
-      supabase.from('sales_payments').insert(
-        payments.map(p => ({
-          bill_id: bill.id,
-          payment_mode: p.payment_mode,
-          amount: parseFloat(p.amount),
-          cheque_number: p.cheque_number || null,
-          reference_serial: p.reference_serial || null,
-        }))
-      ),
+      supabase.from('sales_line_items').insert(lineItemsPayload.map(l => ({ ...l, bill_id: bill.id }))),
+      supabase.from('sales_payments').insert(paymentsPayload.map(p => ({ ...p, bill_id: bill.id }))),
     ])
 
     if (itemsRes.error) { setError('Bill saved but line items failed: ' + itemsRes.error.message); setSubmitting(false); return }
@@ -334,7 +351,6 @@ export default function SalesPage() {
 
         {/* Line Items */}
         <Section title="Line Items">
-          {/* Legend */}
           <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
             <span className="inline-block w-3 h-3 rounded-sm bg-sky-200 border border-sky-300 flex-shrink-0" />
             <span>Items marked <strong>Order In</strong> must be updated in Order Stock</span>
@@ -342,48 +358,59 @@ export default function SalesPage() {
           <div className="space-y-4">
             {lineItems.map((l, i) => (
               <div key={i} className={`border rounded-lg p-3 space-y-2 transition-colors ${l.order_in ? 'bg-sky-50 border-sky-300' : 'bg-gray-50 border-gray-100'}`}>
-                {/* Row 0: Order In toggle */}
+                {/* Order In toggle */}
                 <div className="flex justify-end">
-                  <button type="button" onClick={() => setLineItems(prev => prev.map((item, idx) => idx === i ? { ...item, order_in: !item.order_in } : item))}
+                  <button type="button"
+                    onClick={() => updateLine(i, 'order_in', !l.order_in)}
                     className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-colors ${l.order_in ? 'bg-sky-500 border-sky-500 text-white' : 'bg-white border-gray-300 text-gray-500 hover:border-sky-400 hover:text-sky-600'}`}>
                     Order In
                   </button>
                 </div>
-                {/* Row 1: metal, purity, party */}
+
+                {/* Row 1: Purity | Custom purity | Party | Party name */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-3">
-                    <label className="label">Metal</label>
-                    <select value={l.metal_type} onChange={e => updateLine(i, 'metal_type', e.target.value)} className="input">
-                      <option value="gold">Gold</option>
-                      <option value="silver">Silver</option>
-                      <option value="other">Other</option>
+                    <label className="label">Purity *</label>
+                    <select value={l.purity_choice}
+                      onChange={e => updateLine(i, 'purity_choice', e.target.value)}
+                      className="input">
+                      {PURITY_LIST.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
+                    {/* Derived metal badge */}
+                    <span className={`inline-block mt-1 text-xs font-medium px-2 py-0.5 rounded-full border ${METAL_COLORS[l.metal_type]}`}>
+                      {METAL_LABELS[l.metal_type]}
+                    </span>
                   </div>
-                  {l.metal_type !== 'other' && (
+
+                  {l.purity_choice === 'Other' && (
                     <div className="col-span-3">
-                      <label className="label">Purity</label>
-                      <select value={l.purity} onChange={e => updateLine(i, 'purity', e.target.value)} className="input">
-                        {(PURITY_OPTIONS[l.metal_type] ?? []).map(p => <option key={p}>{p}</option>)}
-                      </select>
+                      <label className="label">Custom Purity</label>
+                      <input value={l.purity_custom}
+                        onChange={e => updateLine(i, 'purity_custom', e.target.value)}
+                        placeholder="e.g. 916, Platinum…"
+                        className="input" />
                     </div>
                   )}
-                  <div className={l.metal_type !== 'other' ? 'col-span-3' : 'col-span-6'}>
+
+                  <div className={l.purity_choice === 'Other' ? 'col-span-3' : 'col-span-6'}>
                     <label className="label">Party</label>
                     <select value={l.party} onChange={e => updateLine(i, 'party', e.target.value)} className="input">
                       <option value="MNAP">MNAP (Own Stock)</option>
                       <option value="custom">Outside Party</option>
                     </select>
                   </div>
+
                   {l.party === 'custom' && (
                     <div className="col-span-3">
                       <label className="label">Party Name *</label>
-                      <input value={l.party_custom} onChange={e => updateLine(i, 'party_custom', e.target.value)}
+                      <input value={l.party_custom}
+                        onChange={e => updateLine(i, 'party_custom', e.target.value)}
                         placeholder="Party name" className="input" required />
                     </div>
                   )}
                 </div>
 
-                {/* Row 2: item name, weight, amount */}
+                {/* Row 2: Item name | Weight | Amount | Remove */}
                 <div className="grid grid-cols-12 gap-2 items-end">
                   <div className="col-span-5">
                     <label className="label">Item Name *</label>
@@ -394,20 +421,32 @@ export default function SalesPage() {
                       {items.map(it => <option key={it} value={it} />)}
                     </datalist>
                   </div>
-                  {l.metal_type !== 'other' ? (
+
+                  {(l.metal_type === 'gold' || l.metal_type === 'silver') ? (
                     <div className="col-span-3">
                       <label className="label">Weight (g) *</label>
                       <input type="number" step="0.001" min="0" value={l.weight}
                         onChange={e => updateLine(i, 'weight', e.target.value)}
                         placeholder="0.000" className="input" required />
                     </div>
-                  ) : <div className="col-span-3" />}
+                  ) : l.metal_type === 'diamond' ? (
+                    <div className="col-span-3">
+                      <label className="label">Weight (ct)</label>
+                      <input type="number" step="0.001" min="0" value={l.weight}
+                        onChange={e => updateLine(i, 'weight', e.target.value)}
+                        placeholder="0.000" className="input" />
+                    </div>
+                  ) : (
+                    <div className="col-span-3" />
+                  )}
+
                   <div className="col-span-3">
                     <label className="label">Amount (₹) *</label>
                     <input type="number" step="0.01" min="0" value={l.amount}
                       onChange={e => updateLine(i, 'amount', e.target.value)}
                       placeholder="0.00" className="input" required />
                   </div>
+
                   <div className="col-span-1 pb-1">
                     {lineItems.length > 1 && (
                       <button type="button" onClick={() => removeLine(i)}
@@ -435,7 +474,7 @@ export default function SalesPage() {
                 <div className="col-span-4">
                   {i === 0 && <label className="label">Mode *</label>}
                   <select value={p.payment_mode} onChange={e => updatePayment(i, 'payment_mode', e.target.value)} className="input">
-                    {Object.entries(PAYMENT_MODE_LABELS).filter(([k]) => !['bank_transfer'].includes(k)).map(([k, v]) => (
+                    {Object.entries(PAYMENT_MODE_LABELS).filter(([k]) => k !== 'bank_transfer').map(([k, v]) => (
                       <option key={k} value={k}>{v}</option>
                     ))}
                   </select>
