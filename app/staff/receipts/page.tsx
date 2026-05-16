@@ -286,7 +286,8 @@ export default function ReceiptsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-4">
+              {/* Mode + Amount: stacked on mobile, side by side on sm+ */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label">Mode *</label>
                   <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="input">

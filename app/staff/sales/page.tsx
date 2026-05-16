@@ -411,9 +411,11 @@ export default function SalesPage() {
                   )}
                 </div>
 
-                {/* Row 2: Item name | Weight | Amount | Remove */}
+                {/* Row 2: Item name | Weight | Amount | Remove
+                    Mobile:  item name full width (row 1), then weight + amount + × (row 2)
+                    Desktop: all in one row */}
                 <div className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-5">
+                  <div className="col-span-12 sm:col-span-5">
                     <label className="label">Item Name *</label>
                     <input list={`item-list-${i}`} value={l.item_name}
                       onChange={e => updateLine(i, 'item_name', e.target.value)}
@@ -424,24 +426,24 @@ export default function SalesPage() {
                   </div>
 
                   {(l.metal_type === 'gold' || l.metal_type === 'silver') ? (
-                    <div className="col-span-3">
+                    <div className="col-span-5 sm:col-span-3">
                       <label className="label">Weight (g) *</label>
                       <input type="number" step="0.001" min="0" value={l.weight}
                         onChange={e => updateLine(i, 'weight', e.target.value)}
                         placeholder="0.000" className="input" required />
                     </div>
                   ) : l.metal_type === 'diamond' ? (
-                    <div className="col-span-3">
+                    <div className="col-span-5 sm:col-span-3">
                       <label className="label">Weight (ct)</label>
                       <input type="number" step="0.001" min="0" value={l.weight}
                         onChange={e => updateLine(i, 'weight', e.target.value)}
                         placeholder="0.000" className="input" />
                     </div>
                   ) : (
-                    <div className="col-span-3" />
+                    <div className="col-span-5 sm:col-span-3" />
                   )}
 
-                  <div className="col-span-3">
+                  <div className="col-span-6 sm:col-span-3">
                     <label className="label">Amount (₹) *</label>
                     <input type="number" step="0.01" min="0" value={l.amount}
                       onChange={e => updateLine(i, 'amount', e.target.value)}
@@ -472,7 +474,8 @@ export default function SalesPage() {
           <div className="space-y-3">
             {payments.map((p, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-4">
+                {/* Mode: full row on mobile, col-4 on desktop */}
+                <div className="col-span-12 sm:col-span-4">
                   {i === 0 && <label className="label">Mode *</label>}
                   <select value={p.payment_mode} onChange={e => updatePayment(i, 'payment_mode', e.target.value)} className="input">
                     {Object.entries(PAYMENT_MODE_LABELS).filter(([k]) => k !== 'bank_transfer').map(([k, v]) => (
@@ -480,32 +483,35 @@ export default function SalesPage() {
                     ))}
                   </select>
                 </div>
-                <div className="col-span-3">
+                {/* Amount: wide on mobile (11/12), narrower on desktop */}
+                <div className="col-span-11 sm:col-span-3">
                   {i === 0 && <label className="label">Amount (₹) *</label>}
                   <input type="number" step="0.01" min="0" value={p.amount}
                     onChange={e => updatePayment(i, 'amount', e.target.value)}
                     placeholder="0.00" className="input" required />
                 </div>
-                {p.payment_mode === 'cheque' && (
-                  <div className="col-span-3">
-                    {i === 0 && <label className="label">Cheque No.</label>}
-                    <input value={p.cheque_number} onChange={e => updatePayment(i, 'cheque_number', e.target.value)}
-                      placeholder="Optional" className="input" />
-                  </div>
-                )}
-                {(p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment') && (
-                  <div className="col-span-3">
-                    {i === 0 && <label className="label">Serial No. *</label>}
-                    <input value={p.reference_serial} onChange={e => updatePayment(i, 'reference_serial', e.target.value)}
-                      placeholder="Ref. serial" className="input" required />
-                  </div>
-                )}
+                {/* Remove: always col-1 */}
                 <div className="col-span-1 pb-1">
                   {payments.length > 1 && (
                     <button type="button" onClick={() => removePayment(i)}
                       className="text-red-500 hover:text-red-700 text-lg font-bold w-full text-center">×</button>
                   )}
                 </div>
+                {/* Cheque/Serial: full row on mobile, col-3 on desktop */}
+                {p.payment_mode === 'cheque' && (
+                  <div className="col-span-12 sm:col-span-3">
+                    {i === 0 && <label className="label">Cheque No.</label>}
+                    <input value={p.cheque_number} onChange={e => updatePayment(i, 'cheque_number', e.target.value)}
+                      placeholder="Optional" className="input" />
+                  </div>
+                )}
+                {(p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment') && (
+                  <div className="col-span-12 sm:col-span-3">
+                    {i === 0 && <label className="label">Serial No. *</label>}
+                    <input value={p.reference_serial} onChange={e => updatePayment(i, 'reference_serial', e.target.value)}
+                      placeholder="Ref. serial" className="input" required />
+                  </div>
+                )}
               </div>
             ))}
           </div>
