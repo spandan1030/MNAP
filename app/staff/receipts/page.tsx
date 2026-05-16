@@ -246,16 +246,28 @@ export default function ReceiptsPage() {
           <p className="text-xs text-gray-500 mb-3">
             If the customer is depositing old gold/silver instead of cash, enter the details below.
           </p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">Old Gold</p>
-              <Field label="Weight (g)" value={oldGoldWeight} onChange={setOldGoldWeight} type="number" placeholder="0.000" />
-              <Field label="Amount (₹)" value={oldGoldAmount} onChange={setOldGoldAmount} type="number" placeholder="0.00" />
+          <div className="space-y-3">
+            {/* Gold row */}
+            <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3">
+              <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-400 mr-1.5 align-middle" />
+                Old Gold
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Weight (g)" value={oldGoldWeight} onChange={setOldGoldWeight} type="number" placeholder="0.000" />
+                <Field label="Amount (₹)" value={oldGoldAmount} onChange={setOldGoldAmount} type="number" placeholder="0.00" />
+              </div>
             </div>
-            <div className="space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Old Silver</p>
-              <Field label="Weight (g)" value={oldSilverWeight} onChange={setOldSilverWeight} type="number" placeholder="0.000" />
-              <Field label="Amount (₹)" value={oldSilverAmount} onChange={setOldSilverAmount} type="number" placeholder="0.00" />
+            {/* Silver row */}
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-400 mr-1.5 align-middle" />
+                Old Silver
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Weight (g)" value={oldSilverWeight} onChange={setOldSilverWeight} type="number" placeholder="0.000" />
+                <Field label="Amount (₹)" value={oldSilverAmount} onChange={setOldSilverAmount} type="number" placeholder="0.00" />
+              </div>
             </div>
           </div>
           {hasMetalExchange && (

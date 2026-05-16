@@ -535,11 +535,29 @@ export default function SalesPage() {
 
         {/* Old Metal Exchange */}
         <Section title="Old Metal Exchange (Optional)">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Input label="Old Gold Weight (g)" value={oldGoldWeight} onChange={setOldGoldWeight} type="number" />
-            <Input label="Old Gold Amount (₹)" value={oldGoldAmount} onChange={setOldGoldAmount} type="number" />
-            <Input label="Old Silver Weight (g)" value={oldSilverWeight} onChange={setOldSilverWeight} type="number" />
-            <Input label="Old Silver Amount (₹)" value={oldSilverAmount} onChange={setOldSilverAmount} type="number" />
+          <div className="space-y-3">
+            {/* Gold row */}
+            <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3">
+              <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide mb-2.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-yellow-400 mr-1.5 align-middle" />
+                Old Gold
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Weight (g)" value={oldGoldWeight} onChange={setOldGoldWeight} type="number" />
+                <Input label="Amount (₹)" value={oldGoldAmount} onChange={setOldGoldAmount} type="number" />
+              </div>
+            </div>
+            {/* Silver row */}
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-400 mr-1.5 align-middle" />
+                Old Silver
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Weight (g)" value={oldSilverWeight} onChange={setOldSilverWeight} type="number" />
+                <Input label="Amount (₹)" value={oldSilverAmount} onChange={setOldSilverAmount} type="number" />
+              </div>
+            </div>
           </div>
         </Section>
 
