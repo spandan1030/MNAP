@@ -12,7 +12,7 @@ const RECEIPT_LABELS: Record<ReceiptType, string> = {
   customer_credit: 'Customer Credit Receipt',
   repair: 'Repairing Receipt',
 }
-const PAYMENT_MODES = ['cash', 'card', 'upi', 'phonepe', 'cheque', 'advance_adjustment', 'sip_adjustment']
+const PAYMENT_MODES = ['cash', 'card', 'upi', 'phonepe', 'cheque', 'advance_adjustment', 'sip_adjustment', 'customer_credit']
 
 export default function ReceiptsPage() {
   const supabase = createClient()

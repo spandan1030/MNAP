@@ -91,6 +91,23 @@ export default function ReportsPage() {
         })),
     ]
 
+    const creditEntries = [
+      ...bills.flatMap((b: any) =>
+        (b.sales_payments ?? [])
+          .filter((p: any) => p.payment_mode === 'customer_credit')
+          .map((p: any) => ({
+            source: 'Sale', customer: b.customer_name, reference: b.bill_number, amount: p.amount,
+          }))
+      ),
+      ...receipts
+        .filter((r: any) => r.payment_mode === 'customer_credit')
+        .map((r: any) => ({
+          source: 'Receipt', customer: r.customer_name,
+          reference: r.serial_number ?? null,
+          amount: r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0),
+        })),
+    ]
+
     setData({
       session, bills, receipts, expenses, oldGoldPurchases, directReceipts,
       goldWeight: goldItems.reduce((s: number, l: any) => s + (l.weight ?? 0), 0),
@@ -108,7 +125,7 @@ export default function ReportsPage() {
       paymentUPI: sumPayments(bills, 'upi') + receiptByMode('upi'),
       paymentPhonePe: sumPayments(bills, 'phonepe') + receiptByMode('phonepe'),
       paymentCheque: sumPayments(bills, 'cheque') + receiptByMode('cheque'),
-      paymentCredit: sumPayments(bills, 'customer_credit'),
+      paymentCredit: sumPayments(bills, 'customer_credit') + receiptByMode('customer_credit'),
       paymentAdvance: sumPayments(bills, 'advance_adjustment') + receiptByMode('advance_adjustment'),
       paymentSIP: sumPayments(bills, 'sip_adjustment') + receiptByMode('sip_adjustment'),
       totalAdvanceReceipts: receipts.filter((r: any) => r.receipt_type === 'advance').reduce((s: number, r: any) => s + r.amount, 0),
@@ -123,7 +140,7 @@ export default function ReportsPage() {
       cashSales, cashReceipts, cashExpenses, cashOldGoldOut, cashDirectIn, cashPartyPayOut,
       opening, expectedCash, actualClosing,
       variance: actualClosing - expectedCash,
-      adjustments,
+      adjustments, creditEntries,
     })
     setLoading(false)
   }
@@ -305,7 +322,7 @@ export default function ReportsPage() {
         ['UPI', pdfAmt(data.paymentUPI)],
         ['PhonePe', pdfAmt(data.paymentPhonePe)],
         ['Cheque', pdfAmt(data.paymentCheque)],
-        ['Customer Credit', pdfAmt(data.paymentCredit)],
+        ['Customer Credit (Sales + Receipts)', pdfAmt(data.paymentCredit)],
         ['Advance Adjusted', pdfAmt(data.paymentAdvance)],
         ['SIP Adjusted', pdfAmt(data.paymentSIP)],
       ],
@@ -334,9 +351,13 @@ export default function ReportsPage() {
 
     if (y > 220) { doc.addPage(); y = 15 }
 
-    // Section 9 — Advance & SIP Adjustments
+    // Section 9 — Advance, SIP & Customer Credit
     if (y > 220) { doc.addPage(); y = 15 }
-    heading('Section 9 — Advance & SIP Adjustments')
+    heading('Section 9 — Advance, SIP & Customer Credit')
+
+    // 9A — Advance & SIP
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold')
+    doc.text('9A — Advance & SIP Adjustments', 14, y); y += 5
     const adjRows = data.adjustments.map((a: any) => [
       a.source, a.customer, a.reference ?? '—',
       PAYMENT_MODE_LABELS[a.mode], a.serial ?? '—', pdfAmt(a.amount),
@@ -347,8 +368,39 @@ export default function ReportsPage() {
         startY: y, head: [['Source', 'Customer', 'Bill / Receipt No.', 'Type', 'Serial No.', 'Amount']],
         body: adjRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
       })
-      y = (doc as any).lastAutoTable.finalY + 8
+      y = (doc as any).lastAutoTable.finalY + 6
     } else { noRecords('No advance or SIP adjustments today.') }
+
+    // 9B — Customer Credit
+    if (y > 230) { doc.addPage(); y = 15 }
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold')
+    doc.text('9B — Customer Credit Used', 14, y); y += 5
+    if (data.creditEntries.length === 0) {
+      noRecords('No customer credit entries today.')
+    } else {
+      // Group by customer
+      const creditGrouped: Record<string, any[]> = {}
+      for (const e of data.creditEntries) {
+        if (!creditGrouped[e.customer]) creditGrouped[e.customer] = []
+        creditGrouped[e.customer].push(e)
+      }
+      const creditRows: any[] = []
+      for (const [customer, entries] of Object.entries(creditGrouped)) {
+        const customerTotal = (entries as any[]).reduce((s: number, e: any) => s + e.amount, 0)
+        ;(entries as any[]).forEach((e: any, i: number) => {
+          creditRows.push([i === 0 ? customer : '', e.source, e.reference ?? '—', pdfAmt(e.amount)])
+        })
+        if ((entries as any[]).length > 1) {
+          creditRows.push(['', '', `${customer} — Subtotal`, pdfAmt(customerTotal)])
+        }
+      }
+      creditRows.push(['', '', 'TOTAL Customer Credit', pdfAmt(data.creditEntries.reduce((s: number, e: any) => s + e.amount, 0))])
+      autoTable(doc, {
+        startY: y, head: [['Customer', 'Source', 'Bill / Receipt No.', 'Amount']],
+        body: creditRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+      })
+      y = (doc as any).lastAutoTable.finalY + 8
+    }
 
     // Section 10 — Expenses
     heading('Section 10 — Expenses')
@@ -723,7 +775,7 @@ export default function ReportsPage() {
               ['UPI', formatCurrency(data.paymentUPI)],
               ['PhonePe', formatCurrency(data.paymentPhonePe)],
               ['Cheque', formatCurrency(data.paymentCheque)],
-              ['Customer Credit (new)', formatCurrency(data.paymentCredit)],
+              ['Customer Credit', formatCurrency(data.paymentCredit)],
               ['Advance Adjusted', formatCurrency(data.paymentAdvance)],
               ['SIP Adjusted', formatCurrency(data.paymentSIP)],
             ]} />
@@ -760,38 +812,97 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 9 — Advance & SIP Adjustments */}
-          <ReportSection title="Section 9 — Advance & SIP Adjustments">
-            {data.adjustments.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-2">No advance or SIP adjustments today.</p>
-            ) : (
-              <table className="w-full text-xs border-collapse">
-                <thead><tr className="bg-gray-50">
-                  <th className="text-left p-2 font-medium">Source</th>
-                  <th className="text-left p-2 font-medium">Customer</th>
-                  <th className="text-left p-2 font-medium">Bill / Receipt No.</th>
-                  <th className="text-left p-2 font-medium">Type</th>
-                  <th className="text-left p-2 font-medium">Serial No.</th>
-                  <th className="text-right p-2 font-medium">Amount</th>
-                </tr></thead>
-                <tbody>
-                  {data.adjustments.map((a: any, i: number) => (
-                    <tr key={i} className="border-t border-gray-100">
-                      <td className="p-2">{a.source}</td>
-                      <td className="p-2">{a.customer}</td>
-                      <td className="p-2">{a.reference ?? '—'}</td>
-                      <td className="p-2">{PAYMENT_MODE_LABELS[a.mode]}</td>
-                      <td className="p-2 font-medium">{a.serial ?? '—'}</td>
-                      <td className="p-2 text-right">{formatCurrency(a.amount)}</td>
-                    </tr>
-                  ))}
-                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                    <td colSpan={5} className="p-2">Total Adjusted</td>
-                    <td className="p-2 text-right">{formatCurrency(data.adjustments.reduce((s: number, a: any) => s + a.amount, 0))}</td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
+          {/* Section 9 — Advance, SIP & Customer Credit */}
+          <ReportSection title="Section 9 — Advance, SIP & Customer Credit">
+            <div className="space-y-5">
+              {/* 9A — Advance & SIP Adjustments */}
+              <div>
+                <p className="text-xs font-semibold uppercase text-amber-700 mb-2">Advance &amp; SIP Adjustments</p>
+                {data.adjustments.length === 0 ? (
+                  <p className="text-xs text-gray-400">No advance or SIP adjustments today.</p>
+                ) : (
+                  <table className="w-full text-xs border-collapse">
+                    <thead><tr className="bg-gray-50">
+                      <th className="text-left p-2 font-medium">Source</th>
+                      <th className="text-left p-2 font-medium">Customer</th>
+                      <th className="text-left p-2 font-medium">Bill / Receipt No.</th>
+                      <th className="text-left p-2 font-medium">Type</th>
+                      <th className="text-left p-2 font-medium">Serial No.</th>
+                      <th className="text-right p-2 font-medium">Amount</th>
+                    </tr></thead>
+                    <tbody>
+                      {data.adjustments.map((a: any, i: number) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="p-2">{a.source}</td>
+                          <td className="p-2">{a.customer}</td>
+                          <td className="p-2">{a.reference ?? '—'}</td>
+                          <td className="p-2">{PAYMENT_MODE_LABELS[a.mode]}</td>
+                          <td className="p-2 font-medium">{a.serial ?? '—'}</td>
+                          <td className="p-2 text-right">{formatCurrency(a.amount)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
+                        <td colSpan={5} className="p-2">Total Adjusted</td>
+                        <td className="p-2 text-right">{formatCurrency(data.adjustments.reduce((s: number, a: any) => s + a.amount, 0))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* 9B — Customer Credit Used */}
+              <div>
+                <p className="text-xs font-semibold uppercase text-amber-700 mb-2">Customer Credit Used</p>
+                {data.creditEntries.length === 0 ? (
+                  <p className="text-xs text-gray-400">No customer credit entries today.</p>
+                ) : (() => {
+                  // Group by customer name
+                  const grouped: Record<string, typeof data.creditEntries> = {}
+                  for (const e of data.creditEntries) {
+                    if (!grouped[e.customer]) grouped[e.customer] = []
+                    grouped[e.customer].push(e)
+                  }
+                  const grandTotal = data.creditEntries.reduce((s: number, e: any) => s + e.amount, 0)
+                  return (
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-gray-50">
+                        <th className="text-left p-2 font-medium">Customer</th>
+                        <th className="text-left p-2 font-medium">Source</th>
+                        <th className="text-left p-2 font-medium">Bill / Receipt No.</th>
+                        <th className="text-right p-2 font-medium">Amount</th>
+                      </tr></thead>
+                      <tbody>
+                        {Object.entries(grouped).map(([customer, entries]) => {
+                          const customerTotal = (entries as any[]).reduce((s: number, e: any) => s + e.amount, 0)
+                          return (
+                            <Fragment key={customer}>
+                              {(entries as any[]).map((e: any, i: number) => (
+                                <tr key={i} className="border-t border-gray-100">
+                                  <td className="p-2">{i === 0 ? e.customer : ''}</td>
+                                  <td className="p-2 text-gray-500">{e.source}</td>
+                                  <td className="p-2">{e.reference ?? '—'}</td>
+                                  <td className="p-2 text-right">{formatCurrency(e.amount)}</td>
+                                </tr>
+                              ))}
+                              {(entries as any[]).length > 1 && (
+                                <tr className="border-t border-amber-200 bg-amber-50">
+                                  <td className="p-2 font-semibold" colSpan={3}>{customer} — Subtotal</td>
+                                  <td className="p-2 text-right font-semibold">{formatCurrency(customerTotal)}</td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                        <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
+                          <td colSpan={3} className="p-2">Total Customer Credit</td>
+                          <td className="p-2 text-right">{formatCurrency(grandTotal)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  )
+                })()}
+              </div>
+            </div>
           </ReportSection>
 
           {/* Section 10 — Expenses */}
