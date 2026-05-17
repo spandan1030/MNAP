@@ -39,7 +39,7 @@ function printLandscape() {
 export default function ArchivalPage() {
   const supabase = createClient()
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [statusFilter, setStatusFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('approved')
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -94,11 +94,36 @@ export default function ArchivalPage() {
     setSharing(true)
     const { default: jsPDF } = await import('jspdf')
     const { default: autoTable } = await import('jspdf-autotable')
-    const doc = new jsPDF()
+
+    // Landscape A4: 297 x 210 mm, printable width = 297 - 14 - 14 = 269
+    const doc = new jsPDF({ orientation: 'landscape' })
     let y = 14
 
+    // PDF-safe helpers — jsPDF standard fonts only support Latin-1
+    // Rs. instead of ₹ (U+20B9), hyphen instead of em dash (U+2014)
+    const pdfAmt = (n: number) =>
+      'Rs.' + (n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    const safe = (s: any): string =>
+      String(s ?? '-').replace(/—/g, '-').replace(/[₹₹]/g, 'Rs.')
+    const adjPdf = (mode: string, serial: string | null | undefined): string => {
+      if ((mode === 'advance_adjustment' || mode === 'sip_adjustment') && serial) return ` (${serial})`
+      if ((mode === 'advance_adjustment' || mode === 'sip_adjustment') && !serial) return ' (-)'
+      return ''
+    }
+    const settlementPdf = (r: any): string => {
+      const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
+      const modeLabel = (PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode) + adjPdf(r.payment_mode, r.reference_serial)
+      if (metalTotal <= 0) return modeLabel
+      const cashPortion = r.amount - metalTotal
+      const parts: string[] = []
+      if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
+      if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
+      if (cashPortion > 0.005) parts.unshift(modeLabel)
+      return parts.join(' + ')
+    }
+
     doc.setFontSize(13); doc.setFont('helvetica', 'bold')
-    doc.text(`M N Alankar Palace — Archival: ${date}`, 14, y); y += 8
+    doc.text(`M N Alankar Palace - Archival: ${date}`, 14, y); y += 8
     doc.setFontSize(8); doc.setFont('helvetica', 'normal')
     doc.setTextColor(120, 120, 120)
     doc.text(`Status: ${statusFilter} | ${totalCount} entries`, 14, y)
@@ -106,114 +131,142 @@ export default function ArchivalPage() {
 
     const hdr = (text: string) => {
       doc.setFontSize(9); doc.setFont('helvetica', 'bold')
-      doc.setFillColor(245, 158, 11); doc.rect(14, y, 182, 6, 'F')
+      doc.setFillColor(245, 158, 11); doc.rect(14, y, 269, 6, 'F')
       doc.setTextColor(255, 255, 255); doc.text(text, 16, y + 4.2)
       doc.setTextColor(0, 0, 0); y += 7
     }
 
+    const tbl = (startY: number, head: string[][], body: any[][]) => {
+      autoTable(doc, {
+        startY, head, body,
+        styles: { fontSize: 7 },
+        headStyles: { fillColor: [251, 191, 36] },
+        margin: { left: 14, right: 14 },
+      })
+      return (doc as any).lastAutoTable.finalY + 5
+    }
+
     const bills = filtered(data.bills)
     if (bills.length > 0) {
-      hdr(`Sales Bills — ${bills.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Bill #', 'Customer', 'Total', 'Old Metal', 'Payments', 'Status']],
-        body: bills.map((b: any) => [
-          b.bill_number, b.customer_name, formatCurrency(b.total_amount),
-          [(b.old_gold_amount ?? 0) > 0 ? `Gold: ${formatCurrency(b.old_gold_amount)}` : '', (b.old_silver_amount ?? 0) > 0 ? `Silver: ${formatCurrency(b.old_silver_amount)}` : ''].filter(Boolean).join(' / ') || '—',
-          (b.sales_payments ?? []).map((p: any) => `${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}${adjSerial(p.payment_mode, p.reference_serial)}: ${formatCurrency(p.amount)}`).join(' | '),
-          b.status,
-        ]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 5
+      hdr(`Sales Bills - ${bills.length} entries`)
+      y = tbl(y,
+        [['Bill #', 'Customer', 'Total', 'Old Gold', 'Old Silver', 'Payments', 'Status']],
+        bills.map((b: any) => [
+          safe(b.bill_number),
+          safe(b.customer_name),
+          pdfAmt(b.total_amount),
+          (b.old_gold_amount ?? 0) > 0 ? `${b.old_gold_weight ?? ''}g / ${pdfAmt(b.old_gold_amount)}` : '-',
+          (b.old_silver_amount ?? 0) > 0 ? `${b.old_silver_weight ?? ''}g / ${pdfAmt(b.old_silver_amount)}` : '-',
+          (b.sales_payments ?? []).map((p: any) =>
+            `${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}${adjPdf(p.payment_mode, p.reference_serial)}: ${pdfAmt(p.amount)}`
+          ).join(' | ') || '-',
+          safe(b.status),
+        ])
+      )
     }
 
+    if (y > 170) { doc.addPage(); y = 14 }
     const receipts = filtered(data.receipts)
     if (receipts.length > 0) {
-      hdr(`Money Receipts — ${receipts.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Type', 'Serial', 'Customer', 'Amount', 'Settlement', 'Status']],
-        body: receipts.map((r: any) => [
-          r.receipt_type.replace('_', ' '), r.serial_number ?? '—', r.customer_name,
-          formatCurrency(r.amount), receiptSettlementLabel(r), r.status,
-        ]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 5
+      hdr(`Money Receipts - ${receipts.length} entries`)
+      y = tbl(y,
+        [['Type', 'Serial', 'Customer', 'Amount', 'Settlement', 'Notes', 'Status']],
+        receipts.map((r: any) => [
+          safe(r.receipt_type.replace('_', ' ')),
+          safe(r.serial_number),
+          safe(r.customer_name),
+          pdfAmt(r.amount),
+          settlementPdf(r),
+          safe(r.notes),
+          safe(r.status),
+        ])
+      )
     }
 
+    if (y > 170) { doc.addPage(); y = 14 }
     const expenses = filtered(data.expenses)
     if (expenses.length > 0) {
-      hdr(`Expenses — ${expenses.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Description', 'Payment', 'Amount', 'Status']],
-        body: expenses.map((e: any) => [e.description, e.payment_type.replace('_', ' '), formatCurrency(e.amount), e.status]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 5
+      hdr(`Expenses - ${expenses.length} entries`)
+      y = tbl(y,
+        [['Description', 'Payment', 'Amount', 'Notes', 'Status']],
+        expenses.map((e: any) => [
+          safe(e.description),
+          safe(e.payment_type.replace('_', ' ')),
+          pdfAmt(e.amount),
+          safe(e.notes),
+          safe(e.status),
+        ])
+      )
     }
 
+    if (y > 170) { doc.addPage(); y = 14 }
     const ogPurchases = filtered(data.ogPurchases)
     if (ogPurchases.length > 0) {
-      hdr(`Old Metal Purchases — ${ogPurchases.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Customer', 'Metal', 'Purity', 'Weight', 'Amount', 'Payment', 'Status']],
-        body: ogPurchases.map((p: any) => [
-          p.customer_name ?? '—', p.metal_type, p.purity ?? '—',
-          p.weight ? `${p.weight}g` : '—', formatCurrency(p.total_amount),
-          PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode, p.status,
-        ]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 5
+      hdr(`Old Metal Purchases - ${ogPurchases.length} entries`)
+      y = tbl(y,
+        [['Customer', 'Phone', 'Metal', 'Purity', 'Weight', 'Rate/g', 'Amount', 'Payment', 'Status']],
+        ogPurchases.map((p: any) => [
+          safe(p.customer_name),
+          safe(p.customer_phone),
+          safe(p.metal_type),
+          safe(p.purity),
+          p.weight ? `${p.weight}g` : '-',
+          p.rate_per_gram ? `Rs.${p.rate_per_gram}` : '-',
+          pdfAmt(p.total_amount),
+          p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
+          safe(p.status),
+        ])
+      )
     }
 
+    if (y > 170) { doc.addPage(); y = 14 }
     const drReceipts = filtered(data.drReceipts)
     if (drReceipts.length > 0) {
-      hdr(`Direct Receipts — ${drReceipts.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Customer', 'Ref', 'Amount', 'Payment', 'Status']],
-        body: drReceipts.map((r: any) => [
-          r.customer_name, r.customer_number ?? '—', formatCurrency(r.amount),
-          PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode, r.status,
-        ]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 5
+      hdr(`Direct Receipts - ${drReceipts.length} entries`)
+      y = tbl(y,
+        [['Customer', 'Ref', 'Amount', 'Payment', 'Notes', 'Status']],
+        drReceipts.map((r: any) => [
+          safe(r.customer_name),
+          safe(r.customer_number),
+          pdfAmt(r.amount),
+          safe(PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode),
+          safe(r.notes),
+          safe(r.status),
+        ])
+      )
     }
 
+    if (y > 170) { doc.addPage(); y = 14 }
     const partyPayments = filtered(data.partyPayments)
     if (partyPayments.length > 0) {
-      hdr(`Party Payments — ${partyPayments.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Party', 'Amount', 'Payment', 'Status']],
-        body: partyPayments.map((p: any) => [
-          p.party_name, formatCurrency(p.amount),
-          PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode, p.status,
-        ]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
-      y = (doc as any).lastAutoTable.finalY + 5
+      hdr(`Party Payments - ${partyPayments.length} entries`)
+      y = tbl(y,
+        [['Party', 'Amount', 'Payment', 'Notes', 'Status']],
+        partyPayments.map((p: any) => [
+          safe(p.party_name),
+          pdfAmt(p.amount),
+          p.payment_mode === 'bank_transfer' ? 'Bank Transfer' : 'Cash',
+          safe(p.notes),
+          safe(p.status),
+        ])
+      )
     }
 
+    if (y > 170) { doc.addPage(); y = 14 }
     const approvalSales = filtered(data.approvalSales)
     if (approvalSales.length > 0) {
-      hdr(`Approval / Party Sales — ${approvalSales.length} entries`)
-      autoTable(doc, {
-        startY: y,
-        head: [['Party', 'Type', 'Items', 'Status']],
-        body: approvalSales.map((a: any) => [
-          a.party_name, a.transaction_type,
-          (a.approval_sale_items ?? []).map((i: any) => `${i.item_name} (${i.metal_type})`).join(', ') || '—',
-          a.status,
-        ]),
-        styles: { fontSize: 7 }, margin: { left: 14, right: 14 },
-      })
+      hdr(`Approval / Party Sales - ${approvalSales.length} entries`)
+      tbl(y,
+        [['Party', 'Type', 'Items', 'Status']],
+        approvalSales.map((a: any) => [
+          safe(a.party_name),
+          safe(a.transaction_type),
+          (a.approval_sale_items ?? []).map((i: any) =>
+            `${safe(i.item_name)} (${safe(i.metal_type)}${i.purity ? ' ' + i.purity : ''})`
+          ).join(', ') || '-',
+          safe(a.status),
+        ])
+      )
     }
 
     const filename = `MNAP_Archival_${date}.pdf`
