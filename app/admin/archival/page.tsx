@@ -365,6 +365,9 @@ export default function ArchivalPage() {
                           {(b.sales_line_items ?? []).map((l: any, idx: number) => (
                             <div key={l.id} className={`py-1 ${idx > 0 ? 'border-t border-gray-100 mt-1' : ''}`}>
                               <span className="font-medium">{l.item_name}</span>
+                              {l.order_in && (
+                                <span className="ml-1.5 text-[10px] font-semibold text-sky-700 bg-sky-200 border border-sky-300 px-1.5 py-0.5 rounded-full">Order In</span>
+                              )}
                               <span className="text-gray-400"> · </span>
                               <span className="text-gray-600 capitalize">{l.metal_type}</span>
                               {l.purity && <span className="text-gray-500"> {l.purity}</span>}
