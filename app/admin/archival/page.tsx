@@ -185,16 +185,26 @@ export default function ArchivalPage() {
     if (receipts.length > 0) {
       hdr(`Money Receipts - ${receipts.length} entries`)
       y = tbl(y,
-        [['Type', 'Serial', 'Customer', 'Amount', 'Settlement', 'Notes', 'Status']],
-        receipts.map((r: any) => [
-          safe(r.receipt_type.replace('_', ' ')),
-          safe(r.serial_number),
-          safe(r.customer_name),
-          pdfAmt(r.amount),
-          settlementPdf(r),
-          safe(r.notes),
-          safe(r.status),
-        ])
+        [['Type', 'Serial', 'Customer', 'Amount', 'Payment', 'Notes', 'Status']],
+        receipts.map((r: any) => {
+          const netCash = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+          const parts: string[] = []
+          if (netCash > 0.005)
+            parts.push(`${PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode}${adjPdf(r.payment_mode, r.reference_serial)}: ${pdfAmt(netCash)}`)
+          if ((r.old_gold_amount ?? 0) > 0)
+            parts.push(`Old Gold${r.old_gold_weight ? ` ${r.old_gold_weight}g` : ''}: ${pdfAmt(r.old_gold_amount)}`)
+          if ((r.old_silver_amount ?? 0) > 0)
+            parts.push(`Old Silver${r.old_silver_weight ? ` ${r.old_silver_weight}g` : ''}: ${pdfAmt(r.old_silver_amount)}`)
+          return [
+            safe(r.receipt_type.replace('_', ' ')),
+            safe(r.serial_number),
+            safe(r.customer_name),
+            pdfAmt(r.amount),
+            parts.join('\n') || '-',
+            safe(r.notes),
+            safe(r.status),
+          ]
+        })
       )
     }
 
@@ -414,34 +424,41 @@ export default function ArchivalPage() {
                     <th className="p-2 font-medium">Repair Type</th>
                     <th className="p-2 font-medium">Weight</th>
                     <th className="p-2 font-medium text-right">Amount</th>
-                    <th className="p-2 font-medium">Old Metal</th>
-                    <th className="p-2 font-medium">Settlement</th>
+                    <th className="p-2 font-medium">Payment</th>
                     <th className="p-2 font-medium">Notes</th>
                     <th className="p-2 font-medium">Status</th>
                     <th className="p-2 font-medium">Time</th>
                     <th className="p-2 font-medium">By</th>
                   </tr></thead>
                   <tbody>
-                    {filtered(data.receipts).map((r: any) => (
-                      <tr key={r.id} className="border-t border-gray-100">
-                        <td className="p-2 capitalize">{r.receipt_type.replace('_', ' ')}</td>
-                        <td className="p-2">{r.serial_number ?? '—'}</td>
-                        <td className="p-2">{r.customer_name}</td>
-                        <td className="p-2">{r.repair_type ?? '—'}</td>
-                        <td className="p-2">{r.weight ? `${r.weight}g` : '—'}</td>
-                        <td className="p-2 text-right font-medium">{formatCurrency(r.amount)}</td>
-                        <td className="p-2">
-                          {(r.old_gold_weight ?? 0) > 0 && <div>Gold: {r.old_gold_weight}g / {formatCurrency(r.old_gold_amount)}</div>}
-                          {(r.old_silver_weight ?? 0) > 0 && <div>Silver: {r.old_silver_weight}g / {formatCurrency(r.old_silver_amount)}</div>}
-                          {!((r.old_gold_weight ?? 0) > 0) && !((r.old_silver_weight ?? 0) > 0) && '—'}
-                        </td>
-                        <td className="p-2">{receiptSettlementLabel(r)}</td>
-                        <td className="p-2 text-gray-500">{r.notes ?? '—'}</td>
-                        <td className="p-2"><StatusBadge status={r.status} /></td>
-                        <td className="p-2 text-gray-400 whitespace-nowrap">{formatDateTime(r.submitted_at)}</td>
-                        <td className="p-2">{r.profiles?.name ?? 'Staff'}</td>
-                      </tr>
-                    ))}
+                    {filtered(data.receipts).map((r: any) => {
+                      const netCash = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+                      return (
+                        <tr key={r.id} className="border-t border-gray-100">
+                          <td className="p-2 capitalize">{r.receipt_type.replace('_', ' ')}</td>
+                          <td className="p-2">{r.serial_number ?? '—'}</td>
+                          <td className="p-2">{r.customer_name}</td>
+                          <td className="p-2">{r.repair_type ?? '—'}</td>
+                          <td className="p-2">{r.weight ? `${r.weight}g` : '—'}</td>
+                          <td className="p-2 text-right font-medium">{formatCurrency(r.amount)}</td>
+                          <td className="p-2">
+                            {netCash > 0.005 && (
+                              <div>{PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode}{adjSerial(r.payment_mode, r.reference_serial)}: {formatCurrency(netCash)}</div>
+                            )}
+                            {(r.old_gold_amount ?? 0) > 0 && (
+                              <div>Old Gold{r.old_gold_weight ? ` ${r.old_gold_weight}g` : ''}: {formatCurrency(r.old_gold_amount)}</div>
+                            )}
+                            {(r.old_silver_amount ?? 0) > 0 && (
+                              <div>Old Silver{r.old_silver_weight ? ` ${r.old_silver_weight}g` : ''}: {formatCurrency(r.old_silver_amount)}</div>
+                            )}
+                          </td>
+                          <td className="p-2 text-gray-500">{r.notes ?? '—'}</td>
+                          <td className="p-2"><StatusBadge status={r.status} /></td>
+                          <td className="p-2 text-gray-400 whitespace-nowrap">{formatDateTime(r.submitted_at)}</td>
+                          <td className="p-2">{r.profiles?.name ?? 'Staff'}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
