@@ -177,20 +177,32 @@ export default function ReportsPage() {
 
     // Section 1 — Sales Register
     heading('Section 1 — Sales Register')
+    const orderInRowSet = new Set<number>()
+    let _ri = 0
     const salesRows = data.bills.flatMap((b: any) =>
-      (b.sales_line_items ?? []).map((l: any, i: number) => [
-        i === 0 ? b.customer_name : '', l.order_in ? `* ${l.item_name}` : l.item_name,
-        l.metal_type, l.purity ?? '—', l.party ?? '—',
-        l.weight ? `${l.weight}g` : '—', pdfAmt(l.amount),
-        i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
-        i === 0 && b.old_silver_weight ? `${b.old_silver_weight}g` : '—',
-      ])
+      (b.sales_line_items ?? []).map((l: any, i: number) => {
+        if (l.order_in) orderInRowSet.add(_ri)
+        _ri++
+        return [
+          i === 0 ? b.customer_name : '', l.order_in ? `* ${l.item_name}` : l.item_name,
+          l.metal_type, l.purity ?? '—', l.party ?? '—',
+          l.weight ? `${l.weight}g` : '—', pdfAmt(l.amount),
+          i === 0 && b.old_gold_weight ? `${b.old_gold_weight}g` : '—',
+          i === 0 && b.old_silver_weight ? `${b.old_silver_weight}g` : '—',
+        ]
+      })
     )
-    const hasOrderIn = data.bills.some((b: any) => (b.sales_line_items ?? []).some((l: any) => l.order_in))
+    const hasOrderIn = orderInRowSet.size > 0
     if (salesRows.length > 0) {
       autoTable(doc, {
         startY: y, head: [['Customer', 'Item', 'Metal', 'Purity', 'Party', 'Weight', 'Amount', 'Old Gold', 'Old Silver']],
         body: salesRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
+        didParseCell: (d: any) => {
+          if (d.section === 'body' && orderInRowSet.has(d.row.index)) {
+            d.cell.styles.fillColor = [219, 234, 254]  // sky-200
+            d.cell.styles.fontStyle = 'bold'
+          }
+        },
       })
       y = (doc as any).lastAutoTable.finalY + 4
       if (hasOrderIn) {

@@ -136,12 +136,13 @@ export default function ArchivalPage() {
       doc.setTextColor(0, 0, 0); y += 7
     }
 
-    const tbl = (startY: number, head: string[][], body: any[][]) => {
+    const tbl = (startY: number, head: string[][], body: any[][], opts: any = {}) => {
       autoTable(doc, {
         startY, head, body,
         styles: { fontSize: 7 },
         headStyles: { fillColor: [251, 191, 36] },
         margin: { left: 14, right: 14 },
+        ...opts,
       })
       return (doc as any).lastAutoTable.finalY + 5
     }
@@ -149,10 +150,12 @@ export default function ArchivalPage() {
     const bills = filtered(data.bills)
     if (bills.length > 0) {
       hdr(`Sales Bills - ${bills.length} entries`)
-      y = tbl(y,
-        [['Bill #', 'Customer', 'Total', 'Old Gold', 'Old Silver', 'Payments', 'Status']],
-        bills.map((b: any) => [
-          safe(b.bill_number),
+      const orderInBillSet = new Set<number>()
+      const billsBody = bills.map((b: any, idx: number) => {
+        const hasOI = (b.sales_line_items ?? []).some((l: any) => l.order_in)
+        if (hasOI) orderInBillSet.add(idx)
+        return [
+          safe(b.bill_number) + (hasOI ? ' *' : ''),
           safe(b.customer_name),
           pdfAmt(b.total_amount),
           (b.old_gold_amount ?? 0) > 0 ? `${b.old_gold_weight ?? ''}g / ${pdfAmt(b.old_gold_amount)}` : '-',
@@ -161,7 +164,19 @@ export default function ArchivalPage() {
             `${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}${adjPdf(p.payment_mode, p.reference_serial)}: ${pdfAmt(p.amount)}`
           ).join(' | ') || '-',
           safe(b.status),
-        ])
+        ]
+      })
+      y = tbl(y,
+        [['Bill #', 'Customer', 'Total', 'Old Gold', 'Old Silver', 'Payments', 'Status']],
+        billsBody,
+        orderInBillSet.size > 0 ? {
+          didParseCell: (d: any) => {
+            if (d.section === 'body' && orderInBillSet.has(d.row.index)) {
+              d.cell.styles.fillColor = [219, 234, 254]  // sky-200
+              d.cell.styles.fontStyle = 'bold'
+            }
+          },
+        } : {}
       )
     }
 
