@@ -337,85 +337,84 @@ export default function ReceiptsPage() {
               ✓ Fully covered by old metal exchange — no cash payment required.
             </div>
           ) : (
-            <div className="space-y-3">
-              {payments.map((p, i) => (
-                <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Mode *</label>
+            <>
+              <div className="space-y-3">
+                {payments.map((p, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-12 sm:col-span-4">
+                      {i === 0 && <label className="label">Mode *</label>}
                       <select value={p.payment_mode} onChange={e => updatePayment(i, 'payment_mode', e.target.value)} className="input">
                         {PAYMENT_MODES.map(m => (
                           <option key={m} value={m}>{PAYMENT_MODE_LABELS[m as keyof typeof PAYMENT_MODE_LABELS] ?? m}</option>
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <label className="label">
-                        Amount (₹) *
-                        {i === 0 && hasMetalExchange && paymentDue > 0 && (
-                          <span className="text-xs font-normal text-gray-400 ml-1">due ₹{paymentDue.toFixed(2)}</span>
-                        )}
-                      </label>
+                    <div className="col-span-11 sm:col-span-7">
+                      {i === 0 && (
+                        <label className="label">
+                          Amount (₹) *
+                          {hasMetalExchange && paymentDue > 0 && (
+                            <span className="text-xs font-normal text-gray-400 ml-1">due ₹{paymentDue.toFixed(2)}</span>
+                          )}
+                        </label>
+                      )}
                       <input
                         type="number" step="0.01" min="0"
                         value={p.amount}
                         onChange={e => updatePayment(i, 'amount', e.target.value)}
-                        className="input"
+                        placeholder="0.00" className="input"
                         required={!fullyByMetal}
-                        placeholder="0.00"
                       />
                     </div>
+                    <div className="col-span-1 pb-1">
+                      {payments.length > 1 && (
+                        <button type="button" onClick={() => removePayment(i)}
+                          className="text-red-500 hover:text-red-700 text-lg font-bold w-full text-center">×</button>
+                      )}
+                    </div>
+                    {p.payment_mode === 'cheque' && (
+                      <div className="col-span-12 sm:col-span-5">
+                        {i === 0 && <label className="label">Cheque No.</label>}
+                        <input type="text" value={p.cheque_number} onChange={e => updatePayment(i, 'cheque_number', e.target.value)}
+                          placeholder="Optional" className="input" />
+                      </div>
+                    )}
+                    {(p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment') && (
+                      <div className="col-span-12 sm:col-span-5">
+                        {i === 0 && <label className="label">Serial No. *</label>}
+                        <input type="text" value={p.reference_serial} onChange={e => updatePayment(i, 'reference_serial', e.target.value)}
+                          placeholder="Ref. serial" className="input" required />
+                      </div>
+                    )}
                   </div>
-                  {p.payment_mode === 'cheque' && (
-                    <div>
-                      <label className="label">Cheque Number</label>
-                      <input type="text" value={p.cheque_number} onChange={e => updatePayment(i, 'cheque_number', e.target.value)}
-                        placeholder="Optional" className="input" />
-                    </div>
-                  )}
-                  {(p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment') && (
-                    <div>
-                      <label className="label">Reference Serial No. *</label>
-                      <input type="text" value={p.reference_serial} onChange={e => updatePayment(i, 'reference_serial', e.target.value)}
-                        placeholder="Ref. serial" className="input" required />
-                    </div>
-                  )}
-                  {payments.length > 1 && (
-                    <div className="flex justify-end">
-                      <button type="button" onClick={() => removePayment(i)}
-                        className="text-xs text-red-500 hover:text-red-700 font-medium">
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
 
               <button type="button" onClick={() => setPayments(prev => [...prev, defaultPayment()])}
-                className="w-full border border-dashed border-amber-400 text-amber-700 text-sm font-medium py-2 rounded-lg hover:bg-amber-50 transition-colors">
+                className="mt-3 text-sm text-amber-600 hover:text-amber-800 font-medium">
                 + Add Payment Mode
               </button>
 
-              {/* Amount match indicator */}
-              {total > 0 && (
-                <div className="mt-1 flex justify-between text-sm">
-                  <span className="text-gray-500">
-                    {hasMetalExchange
-                      ? `₹${totalPaid.toFixed(2)} paid + ₹${metalTotal.toFixed(2)} metal = ₹${(totalPaid + metalTotal).toFixed(2)}`
-                      : `Total paid: ₹${totalPaid.toFixed(2)}`}
-                  </span>
-                  {totalPaid > 0 || hasMetalExchange ? (
-                    amountMismatch ? (
+              <div className="mt-3 space-y-1">
+                {hasMetalExchange && (
+                  <p className="text-xs text-gray-400">
+                    Total ₹{total.toFixed(2)} − Old Metal ₹{metalTotal.toFixed(2)} = Due: ₹{paymentDue.toFixed(2)}
+                  </p>
+                )}
+                {total > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Payment Total: ₹{totalPaid.toFixed(2)}</span>
+                    {amountMismatch ? (
                       <span className="text-red-600 font-semibold">
                         ✗ Mismatch: ₹{Math.abs(totalPaid + metalTotal - total).toFixed(2)} {totalPaid + metalTotal > total ? 'over' : 'short'}
                       </span>
-                    ) : (
+                    ) : total > 0 ? (
                       <span className="text-green-600 font-semibold">✓ Amounts match</span>
-                    )
-                  ) : null}
-                </div>
-              )}
-            </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </Section>
 
