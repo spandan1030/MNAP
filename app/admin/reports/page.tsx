@@ -499,8 +499,17 @@ export default function ReportsPage() {
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-gray-900">End-of-Day Report</h1>
-          <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setReportDate(d => { const dt = new Date(d); dt.setDate(dt.getDate() - 1); return dt.toISOString().split('T')[0] })}
+              className="px-2 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-sm leading-none">‹</button>
+            <input type="date" value={reportDate} onChange={e => setReportDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            <button
+              onClick={() => setReportDate(d => { const dt = new Date(d); dt.setDate(dt.getDate() + 1); return dt.toISOString().split('T')[0] })}
+              disabled={reportDate >= new Date().toISOString().split('T')[0]}
+              className="px-2 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm leading-none">›</button>
+          </div>
         </div>
         {data && (
           <div className="flex flex-wrap gap-2">

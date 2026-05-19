@@ -325,8 +325,17 @@ export default function ArchivalPage() {
       <div className="flex items-center justify-between flex-wrap gap-3 no-print">
         <h1 className="text-2xl font-bold text-gray-900">Archival — All Entries</h1>
         <div className="flex items-center gap-3 flex-wrap">
-          <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDate(d => { const dt = new Date(d); dt.setDate(dt.getDate() - 1); return dt.toISOString().split('T')[0] })}
+              className="px-2 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-sm leading-none">‹</button>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            <button
+              onClick={() => setDate(d => { const dt = new Date(d); dt.setDate(dt.getDate() + 1); return dt.toISOString().split('T')[0] })}
+              disabled={date >= new Date().toISOString().split('T')[0]}
+              className="px-2 py-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed text-sm leading-none">›</button>
+          </div>
           <div className="flex gap-1 flex-wrap">
             {['all', 'pending', 'approved', 'rejected'].map(s => (
               <button key={s} onClick={() => setStatusFilter(s)}
