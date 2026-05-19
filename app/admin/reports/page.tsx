@@ -62,6 +62,7 @@ export default function ReportsPage() {
 
     const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? [])
     const goldItems = allLineItems.filter((l: any) => l.metal_type === 'gold')
+    const diamondItems = allLineItems.filter((l: any) => l.metal_type === 'diamond')
     const silverItems = allLineItems.filter((l: any) => l.metal_type === 'silver')
     const otherItems = allLineItems.filter((l: any) => l.metal_type === 'other')
     const sumPayments = (bs: any[], mode: string) =>
@@ -122,6 +123,8 @@ export default function ReportsPage() {
       session, bills, receipts, expenses, oldGoldPurchases, directReceipts,
       goldWeight: goldItems.reduce((s: number, l: any) => s + (l.weight ?? 0), 0),
       goldAmount: goldItems.reduce((s: number, l: any) => s + l.amount, 0),
+      diamondCount: diamondItems.length,
+      diamondAmount: diamondItems.reduce((s: number, l: any) => s + l.amount, 0),
       silverWeight: silverItems.reduce((s: number, l: any) => s + (l.weight ?? 0), 0),
       silverAmount: silverItems.reduce((s: number, l: any) => s + l.amount, 0),
       otherCount: otherItems.length,
@@ -319,8 +322,11 @@ export default function ReportsPage() {
     autoTable(doc, {
       startY: y,
       body: [
-        ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
-        ['Gold / Diamond Amount', pdfAmt(data.goldAmount)],
+        ['Gold Weight Sold', `${data.goldWeight.toFixed(3)}g`],
+        ['Gold Amount', pdfAmt(data.goldAmount)],
+        ...(data.diamondCount > 0 ? [
+          ['Diamond Items', `${data.diamondCount} items — ${pdfAmt(data.diamondAmount)}`],
+        ] : []),
         ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
         ['Silver Amount', pdfAmt(data.silverAmount)],
         ['Other / Misc Items', `${data.otherCount} items — ${pdfAmt(data.otherAmount)}`],
@@ -532,7 +538,7 @@ export default function ReportsPage() {
                 <span>Items marked <strong>Order In</strong> must be updated in Order Stock</span>
               </div>
             )}
-            {['gold', 'silver', 'other'].map(metal => {
+            {['gold', 'diamond', 'silver', 'other'].map(metal => {
               const metalItems = data.bills.flatMap((b: any) =>
                 (b.sales_line_items ?? [])
                   .filter((l: any) => l.metal_type === metal)
@@ -778,8 +784,11 @@ export default function ReportsPage() {
           {/* Section 6 — Sales + Money Receipts Summary */}
           <ReportSection title="Section 6 — Sales + Money Receipts Summary">
             <SummaryTable rows={[
-              ['Gold / Diamond Weight Sold', `${data.goldWeight.toFixed(3)}g`],
-              ['Gold / Diamond Amount', formatCurrency(data.goldAmount)],
+              ['Gold Weight Sold', `${data.goldWeight.toFixed(3)}g`],
+              ['Gold Amount', formatCurrency(data.goldAmount)],
+              ...(data.diamondCount > 0 ? [
+                ['Diamond Items', `${data.diamondCount} items — ${formatCurrency(data.diamondAmount)}`],
+              ] : []),
               ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
               ['Silver Amount', formatCurrency(data.silverAmount)],
               ['Other / Misc Items', `${data.otherCount} items — ${formatCurrency(data.otherAmount)}`],
