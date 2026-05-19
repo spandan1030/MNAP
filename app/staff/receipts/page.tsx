@@ -14,6 +14,17 @@ const RECEIPT_LABELS: Record<ReceiptType, string> = {
 }
 const PAYMENT_MODES = ['cash', 'card', 'upi', 'phonepe', 'cheque', 'advance_adjustment', 'sip_adjustment', 'customer_credit']
 
+interface ReceiptPayment {
+  payment_mode: string
+  amount: string
+  cheque_number: string
+  reference_serial: string
+}
+
+const defaultPayment = (): ReceiptPayment => ({
+  payment_mode: 'cash', amount: '', cheque_number: '', reference_serial: '',
+})
+
 export default function ReceiptsPage() {
   const supabase = createClient()
   const [receiptType, setReceiptType] = useState<ReceiptType>('advance')
@@ -35,10 +46,7 @@ export default function ReceiptsPage() {
   const [oldGoldAmount, setOldGoldAmount] = useState('')
   const [oldSilverWeight, setOldSilverWeight] = useState('')
   const [oldSilverAmount, setOldSilverAmount] = useState('')
-  const [paymentMode, setPaymentMode] = useState('cash')
-  const [paymentAmount, setPaymentAmount] = useState('')
-  const [chequeNumber, setChequeNumber] = useState('')
-  const [referenceSerial, setReferenceSerial] = useState('')
+  const [payments, setPayments] = useState<ReceiptPayment[]>([defaultPayment()])
   const [notes, setNotes] = useState('')
 
   // Derived amounts
@@ -47,9 +55,9 @@ export default function ReceiptsPage() {
   const oldSilverAmt = parseFloat(oldSilverAmount) || 0
   const metalTotal = oldGoldAmt + oldSilverAmt
   const paymentDue = Math.max(0, total - metalTotal)
-  const paidViaMode = parseFloat(paymentAmount) || 0
+  const totalPaid = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0)
   const fullyByMetal = total > 0 && metalTotal >= total
-  const amountMismatch = total > 0 && Math.abs(paidViaMode + metalTotal - total) > 0.01
+  const amountMismatch = total > 0 && !fullyByMetal && Math.abs(totalPaid + metalTotal - total) > 0.01
 
   async function loadSession() {
     const today = new Date().toISOString().split('T')[0]
@@ -65,12 +73,17 @@ export default function ReceiptsPage() {
 
   async function loadSentBack(sid: string, uid: string) {
     const { data } = await supabase.from('money_receipts')
-      .select('id, receipt_type, serial_number, customer_name, repair_type, weight, amount, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount, payment_mode, cheque_number, reference_serial, notes, send_back_reason')
+      .select('id, receipt_type, serial_number, customer_name, repair_type, weight, amount, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount, notes, send_back_reason')
       .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', uid)
     setSentBackEntries(data ?? [])
   }
 
-  function loadForEdit(entry: any) {
+  async function loadForEdit(entry: any) {
+    const { data: childPayments } = await supabase
+      .from('money_receipt_payments')
+      .select('*')
+      .eq('receipt_id', entry.id)
+
     setReceiptType(entry.receipt_type as ReceiptType)
     setSerialNumber(entry.serial_number ?? '')
     setCustomerName(entry.customer_name ?? '')
@@ -81,11 +94,16 @@ export default function ReceiptsPage() {
     setOldGoldAmount(entry.old_gold_amount?.toString() ?? '')
     setOldSilverWeight(entry.old_silver_weight?.toString() ?? '')
     setOldSilverAmount(entry.old_silver_amount?.toString() ?? '')
-    setPaymentMode(entry.payment_mode ?? 'cash')
-    const derived = Math.max(0, (entry.amount ?? 0) - (entry.old_gold_amount ?? 0) - (entry.old_silver_amount ?? 0))
-    setPaymentAmount(derived > 0 ? derived.toFixed(2) : '')
-    setChequeNumber(entry.cheque_number ?? '')
-    setReferenceSerial(entry.reference_serial ?? '')
+    setPayments(
+      childPayments && childPayments.length > 0
+        ? childPayments.map((p: any) => ({
+            payment_mode: p.payment_mode,
+            amount: String(p.amount),
+            cheque_number: p.cheque_number ?? '',
+            reference_serial: p.reference_serial ?? '',
+          }))
+        : [defaultPayment()]
+    )
     setNotes(entry.notes ?? '')
     setEditingId(entry.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -100,12 +118,20 @@ export default function ReceiptsPage() {
     setSerialNumber(''); setCustomerName(''); setRepairType(''); setRepairWeight('')
     setTotalAmount(''); setOldGoldWeight(''); setOldGoldAmount('')
     setOldSilverWeight(''); setOldSilverAmount('')
-    setPaymentMode('cash'); setPaymentAmount(''); setChequeNumber(''); setReferenceSerial(''); setNotes('')
+    setPayments([defaultPayment()]); setNotes('')
   }
 
   function resetForm() {
     clearFields()
     setTimeout(() => setSuccess(false), 3000)
+  }
+
+  function updatePayment(i: number, field: keyof ReceiptPayment, val: string) {
+    setPayments(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: val } : p))
+  }
+
+  function removePayment(i: number) {
+    setPayments(prev => prev.filter((_, idx) => idx !== i))
   }
 
   useEffect(() => { loadSession() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -117,17 +143,17 @@ export default function ReceiptsPage() {
     if (!sessionId) { setError('No open day session. Ask admin to open the day.'); return }
     if (total <= 0) { setError('Enter a valid total amount.'); return }
     if (!fullyByMetal && amountMismatch) {
-      setError('Payment amounts must exactly match the total (payment mode + old metal exchange).')
+      setError('Payment amounts must exactly match the total (payment modes + old metal exchange).')
       return
     }
-    if (!fullyByMetal && paidViaMode <= 0) {
-      setError('Enter the amount being paid via ' + paymentMode + '.')
+    if (!fullyByMetal && totalPaid <= 0) {
+      setError('Enter at least one payment amount.')
       return
     }
 
     setSubmitting(true)
 
-    const payload: Record<string, unknown> = {
+    const receiptPayload: Record<string, unknown> = {
       receipt_type: receiptType,
       serial_number: (receiptType === 'advance' || receiptType === 'sip') ? serialNumber : null,
       customer_name: customerName,
@@ -138,38 +164,64 @@ export default function ReceiptsPage() {
       old_gold_amount: oldGoldAmt || null,
       old_silver_weight: parseFloat(oldSilverWeight) || null,
       old_silver_amount: oldSilverAmt || null,
-      payment_mode: fullyByMetal ? null : paymentMode,
-      cheque_number: paymentMode === 'cheque' && !fullyByMetal ? chequeNumber : null,
-      reference_serial: (paymentMode === 'advance_adjustment' || paymentMode === 'sip_adjustment') && !fullyByMetal ? referenceSerial : null,
+      // legacy single-mode columns now unused for new records
+      payment_mode: null,
+      cheque_number: null,
+      reference_serial: null,
       notes: notes || null,
     }
 
+    const paymentsPayload = fullyByMetal ? [] : payments.map(p => ({
+      payment_mode: p.payment_mode,
+      amount: parseFloat(p.amount),
+      cheque_number: p.payment_mode === 'cheque' ? p.cheque_number || null : null,
+      reference_serial: (p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment')
+        ? p.reference_serial || null : null,
+    }))
+
     if (editingId) {
       const { error: err } = await supabase.from('money_receipts').update({
-        ...payload,
+        ...receiptPayload,
         status: 'pending',
         send_back_reason: null,
         submitted_at: new Date().toISOString(),
       }).eq('id', editingId)
-      if (err) { setError(err.message) } else {
-        setSuccess(true)
-        setEditingId(null)
-        await loadSentBack(sessionId, userId!)
-        resetForm()
+
+      if (err) { setError(err.message); setSubmitting(false); return }
+
+      await supabase.from('money_receipt_payments').delete().eq('receipt_id', editingId)
+      if (paymentsPayload.length > 0) {
+        await supabase.from('money_receipt_payments').insert(
+          paymentsPayload.map(p => ({ ...p, receipt_id: editingId }))
+        )
       }
+
+      setSuccess(true)
+      setEditingId(null)
+      await loadSentBack(sessionId, userId!)
+      resetForm()
       setSubmitting(false)
       return
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    const { error: err } = await supabase.from('money_receipts').insert({
-      ...payload,
+    const { data: receipt, error: err } = await supabase.from('money_receipts').insert({
+      ...receiptPayload,
       day_session_id: sessionId,
       submitted_by: user!.id,
-    })
+    }).select('id').single()
 
-    if (err) { setError(err.message) }
-    else { setSuccess(true); resetForm() }
+    if (err || !receipt) { setError(err?.message ?? 'Failed to save receipt.'); setSubmitting(false); return }
+
+    if (paymentsPayload.length > 0) {
+      const { error: pmErr } = await supabase.from('money_receipt_payments').insert(
+        paymentsPayload.map(p => ({ ...p, receipt_id: receipt.id }))
+      )
+      if (pmErr) { setError('Receipt saved but payments failed: ' + pmErr.message); setSubmitting(false); return }
+    }
+
+    setSuccess(true)
+    resetForm()
     setSubmitting(false)
   }
 
@@ -278,67 +330,91 @@ export default function ReceiptsPage() {
           )}
         </Section>
 
-        {/* Payment Mode */}
-        <Section title="Payment Mode">
+        {/* Payment Modes */}
+        <Section title="Payment Modes">
           {fullyByMetal ? (
             <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
               ✓ Fully covered by old metal exchange — no cash payment required.
             </div>
           ) : (
             <div className="space-y-3">
-              {/* Mode + Amount: stacked on mobile, side by side on sm+ */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Mode *</label>
-                  <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="input">
-                    {PAYMENT_MODES.map(m => (
-                      <option key={m} value={m}>{PAYMENT_MODE_LABELS[m as keyof typeof PAYMENT_MODE_LABELS] ?? m}</option>
-                    ))}
-                  </select>
+              {payments.map((p, i) => (
+                <div key={i} className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label">Mode *</label>
+                      <select value={p.payment_mode} onChange={e => updatePayment(i, 'payment_mode', e.target.value)} className="input">
+                        {PAYMENT_MODES.map(m => (
+                          <option key={m} value={m}>{PAYMENT_MODE_LABELS[m as keyof typeof PAYMENT_MODE_LABELS] ?? m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">
+                        Amount (₹) *
+                        {i === 0 && hasMetalExchange && paymentDue > 0 && (
+                          <span className="text-xs font-normal text-gray-400 ml-1">due ₹{paymentDue.toFixed(2)}</span>
+                        )}
+                      </label>
+                      <input
+                        type="number" step="0.01" min="0"
+                        value={p.amount}
+                        onChange={e => updatePayment(i, 'amount', e.target.value)}
+                        className="input"
+                        required={!fullyByMetal}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  {p.payment_mode === 'cheque' && (
+                    <div>
+                      <label className="label">Cheque Number</label>
+                      <input type="text" value={p.cheque_number} onChange={e => updatePayment(i, 'cheque_number', e.target.value)}
+                        placeholder="Optional" className="input" />
+                    </div>
+                  )}
+                  {(p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment') && (
+                    <div>
+                      <label className="label">Reference Serial No. *</label>
+                      <input type="text" value={p.reference_serial} onChange={e => updatePayment(i, 'reference_serial', e.target.value)}
+                        placeholder="Ref. serial" className="input" required />
+                    </div>
+                  )}
+                  {payments.length > 1 && (
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => removePayment(i)}
+                        className="text-xs text-red-500 hover:text-red-700 font-medium">
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="label">
-                    Amount (₹) *
-                    {hasMetalExchange && paymentDue > 0 && (
-                      <span className="text-xs font-normal text-gray-400 ml-1">expected ₹{paymentDue.toFixed(2)}</span>
-                    )}
-                  </label>
-                  <input
-                    type="number" step="0.01" min="0"
-                    value={paymentAmount}
-                    onChange={e => setPaymentAmount(e.target.value)}
-                    className="input"
-                    required={!fullyByMetal}
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-              {paymentMode === 'cheque' && (
-                <Field label="Cheque Number" value={chequeNumber} onChange={setChequeNumber} placeholder="Optional" />
-              )}
-              {(paymentMode === 'advance_adjustment' || paymentMode === 'sip_adjustment') && (
-                <Field label="Reference Serial No. *" value={referenceSerial} onChange={setReferenceSerial} placeholder="Ref. serial" required />
-              )}
-            </div>
-          )}
+              ))}
 
-          {/* Amount match indicator */}
-          {total > 0 && !fullyByMetal && (
-            <div className="mt-3 flex justify-between text-sm">
-              <span className="text-gray-500">
-                {hasMetalExchange
-                  ? `₹${paidViaMode.toFixed(2)} + ₹${metalTotal.toFixed(2)} metal = ₹${(paidViaMode + metalTotal).toFixed(2)}`
-                  : `Amount: ₹${paidViaMode.toFixed(2)}`}
-              </span>
-              {paidViaMode > 0 || hasMetalExchange ? (
-                amountMismatch ? (
-                  <span className="text-red-600 font-semibold">
-                    ✗ Mismatch: ₹{Math.abs(paidViaMode + metalTotal - total).toFixed(2)} {paidViaMode + metalTotal > total ? 'over' : 'short'}
+              <button type="button" onClick={() => setPayments(prev => [...prev, defaultPayment()])}
+                className="w-full border border-dashed border-amber-400 text-amber-700 text-sm font-medium py-2 rounded-lg hover:bg-amber-50 transition-colors">
+                + Add Payment Mode
+              </button>
+
+              {/* Amount match indicator */}
+              {total > 0 && (
+                <div className="mt-1 flex justify-between text-sm">
+                  <span className="text-gray-500">
+                    {hasMetalExchange
+                      ? `₹${totalPaid.toFixed(2)} paid + ₹${metalTotal.toFixed(2)} metal = ₹${(totalPaid + metalTotal).toFixed(2)}`
+                      : `Total paid: ₹${totalPaid.toFixed(2)}`}
                   </span>
-                ) : (
-                  <span className="text-green-600 font-semibold">✓ Amounts match</span>
-                )
-              ) : null}
+                  {totalPaid > 0 || hasMetalExchange ? (
+                    amountMismatch ? (
+                      <span className="text-red-600 font-semibold">
+                        ✗ Mismatch: ₹{Math.abs(totalPaid + metalTotal - total).toFixed(2)} {totalPaid + metalTotal > total ? 'over' : 'short'}
+                      </span>
+                    ) : (
+                      <span className="text-green-600 font-semibold">✓ Amounts match</span>
+                    )
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
         </Section>
@@ -356,7 +432,7 @@ export default function ReceiptsPage() {
 
         <button
           type="submit"
-          disabled={submitting || (!fullyByMetal && amountMismatch) || (!fullyByMetal && total > 0 && paidViaMode <= 0)}
+          disabled={submitting || (total > 0 && !fullyByMetal && amountMismatch) || (total > 0 && !fullyByMetal && totalPaid <= 0)}
           className="w-full bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
         >
           {submitting ? 'Submitting…' : editingId ? 'Resubmit Receipt' : 'Submit Receipt'}

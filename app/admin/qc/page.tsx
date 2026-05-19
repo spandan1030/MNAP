@@ -12,7 +12,7 @@ interface AuditEntry { field_name: string; original_value: string; edited_value:
 
 const EDITABLE_FIELDS: Record<string, string[]> = {
   sales:        ['customer_name', 'customer_phone', 'bill_number', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount'],
-  receipt:      ['receipt_type', 'serial_number', 'customer_name', 'repair_type', 'weight', 'amount', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount', 'payment_mode', 'reference_serial', 'notes'],
+  receipt:      ['receipt_type', 'serial_number', 'customer_name', 'repair_type', 'weight', 'amount', 'old_gold_weight', 'old_gold_amount', 'old_silver_weight', 'old_silver_amount', 'notes'],
   expense:      ['description', 'amount', 'payment_type', 'notes'],
   old_gold:     ['customer_name', 'customer_phone', 'metal_type', 'purity', 'weight', 'rate_per_gram', 'total_amount', 'payment_mode', 'notes'],
   direct:       ['customer_name', 'customer_number', 'amount', 'payment_mode', 'notes'],
@@ -121,6 +121,9 @@ export default function QCPage() {
         supabase.from('sales_payments').select('*').eq('bill_id', id),
       ])
       setSelectedDetail({ sales_line_items: li.data ?? [], sales_payments: sp.data ?? [] })
+    } else if (type === 'receipt') {
+      const { data } = await supabase.from('money_receipt_payments').select('*').eq('receipt_id', id)
+      setSelectedDetail({ money_receipt_payments: data ?? [] })
     } else if (type === 'approval_sale') {
       const { data } = await supabase.from('approval_sale_items').select('*').eq('sale_id', id)
       setSelectedDetail({ approval_sale_items: data ?? [] })
@@ -318,7 +321,7 @@ export default function QCPage() {
               ) : (
                 <>
                   {selected.type === 'sales'        && <SalesBillDetail     data={{ ...selected.data, ...selectedDetail }} dailyRates={dailyRates} />}
-                  {selected.type === 'receipt'      && <ReceiptDetail       data={selected.data} />}
+                  {selected.type === 'receipt'      && <ReceiptDetail       data={{ ...selected.data, ...selectedDetail }} />}
                   {selected.type === 'expense'      && <ExpenseDetail       data={selected.data} />}
                   {selected.type === 'old_gold'     && <OldGoldDetail       data={selected.data} />}
                   {selected.type === 'direct'       && <DirectReceiptDetail data={selected.data} />}
@@ -616,8 +619,9 @@ function SalesBillDetail({ data, dailyRates }: { data: any; dailyRates: any }) {
 
 function ReceiptDetail({ data }: { data: any }) {
   const metalTotal = (data.old_gold_amount ?? 0) + (data.old_silver_amount ?? 0)
-  const cashPortion = data.amount - metalTotal
   const hasMetalExchange = metalTotal > 0
+  const childPayments: any[] = data.money_receipt_payments ?? []
+  const hasChildPayments = childPayments.length > 0
   return (
     <div className="space-y-3 text-sm">
       <InfoGrid items={[
@@ -635,15 +639,31 @@ function ReceiptDetail({ data }: { data: any }) {
           {(data.old_silver_amount ?? 0) > 0 && <p>Silver{data.old_silver_weight ? `: ${data.old_silver_weight}g` : ''} — {formatCurrency(data.old_silver_amount)}</p>}
         </div>
       )}
-      {cashPortion > 0.005 ? (
-        <InfoGrid items={[
-          ['Payment Mode', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode],
-          ['Cash Received', formatCurrency(cashPortion)],
-        ]} />
-      ) : hasMetalExchange ? (
-        <p className="text-xs text-gray-500 italic px-1">Fully settled via metal exchange — no cash received</p>
+      {hasChildPayments ? (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 mb-1">Payments</p>
+          {childPayments.map((p: any, i: number) => (
+            <div key={p.id ?? i} className="flex justify-between text-xs py-0.5">
+              <span>{PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}{p.reference_serial ? ` (${p.reference_serial})` : ''}{p.cheque_number ? ` #${p.cheque_number}` : ''}</span>
+              <span className="font-medium">{formatCurrency(p.amount)}</span>
+            </div>
+          ))}
+          {hasMetalExchange && (
+            <div className="flex justify-between text-xs py-0.5 text-gray-500 italic">
+              <span>Old metal exchange</span>
+              <span>{formatCurrency(metalTotal)}</span>
+            </div>
+          )}
+        </div>
       ) : (
-        <InfoGrid items={[['Payment Mode', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode]]} />
+        /* legacy fallback for records before migration */
+        data.payment_mode ? (
+          <InfoGrid items={[
+            ['Payment Mode', PAYMENT_MODE_LABELS[data.payment_mode] ?? data.payment_mode],
+          ]} />
+        ) : hasMetalExchange ? (
+          <p className="text-xs text-gray-500 italic px-1">Fully settled via metal exchange — no cash received</p>
+        ) : null
       )}
     </div>
   )
@@ -783,11 +803,6 @@ function ReceiptEditForm({ data, set }: { data: any; set: (f: string, v: any) =>
         <EField label="Item Weight (g)" value={data.weight} onChange={v => set('weight', v)} type="number" step="0.001" />
       </>}
       <EField label="Total Amount (₹)" value={data.amount} onChange={v => set('amount', v)} type="number" step="0.01" />
-      <ESel label="Payment Mode" value={data.payment_mode ?? ''} onChange={v => set('payment_mode', v || null)}
-        options={[['','None (fully by metal)'],['cash','Cash'],['card','Card'],['upi','UPI'],['phonepe','PhonePe'],['cheque','Cheque'],['advance_adjustment','Advance Adjustment'],['sip_adjustment','SIP Adjustment']]} />
-      {(data.payment_mode === 'advance_adjustment' || data.payment_mode === 'sip_adjustment') && (
-        <EField label="Reference Serial No." value={data.reference_serial} onChange={v => set('reference_serial', v)} />
-      )}
       <EField label="Old Gold Weight (g)" value={data.old_gold_weight} onChange={v => set('old_gold_weight', v)} type="number" step="0.001" />
       <EField label="Old Gold Amount (₹)" value={data.old_gold_amount} onChange={v => set('old_gold_amount', v)} type="number" step="0.01" />
       <EField label="Old Silver Weight (g)" value={data.old_silver_weight} onChange={v => set('old_silver_weight', v)} type="number" step="0.001" />
@@ -795,6 +810,7 @@ function ReceiptEditForm({ data, set }: { data: any; set: (f: string, v: any) =>
       <div className="col-span-2">
         <EField label="Notes" value={data.notes} onChange={v => set('notes', v)} />
       </div>
+      <p className="col-span-2 text-xs text-gray-400 italic">Payment rows cannot be edited here.</p>
     </div>
   )
 }

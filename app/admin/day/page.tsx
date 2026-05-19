@@ -39,7 +39,7 @@ export default function DayRegisterPage() {
       const [sp, mr, ex, ogp, dr, pp, b, r, e, og, drp, ppp] = await Promise.all([
         supabase.from('sales_payments').select('amount, payment_mode, sales_bills!inner(day_session_id, status)')
           .eq('sales_bills.day_session_id', data.id).neq('sales_bills.status', 'rejected'),
-        supabase.from('money_receipts').select('amount, payment_mode, old_gold_amount, old_silver_amount').eq('day_session_id', data.id).neq('status', 'rejected'),
+        supabase.from('money_receipts').select('amount, money_receipt_payments(payment_mode, amount)').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('expenses').select('amount, payment_type').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('old_gold_purchases').select('total_amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
         supabase.from('direct_receipts').select('amount, payment_mode').eq('day_session_id', data.id).neq('status', 'rejected'),
@@ -52,7 +52,7 @@ export default function DayRegisterPage() {
         supabase.from('party_payments').select('id', { count: 'exact', head: true }).eq('day_session_id', data.id).eq('status', 'pending'),
       ])
       const cashIn = (sp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
-      const rCash = (mr.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0), 0)
+      const rCash = (mr.data ?? []).flatMap((r: any) => r.money_receipt_payments ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
       const cashOut = (ex.data ?? []).filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
       const cashOgpOut = (ogp.data ?? []).filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
       const cashDrIn = (dr.data ?? []).filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)

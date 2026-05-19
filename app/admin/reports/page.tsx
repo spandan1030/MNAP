@@ -5,14 +5,20 @@ import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, formatDate, PAYMENT_MODE_LABELS } from '@/lib/utils'
 
 function receiptSettlementLabel(r: any): string {
-  const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
-  if (metalTotal <= 0) return PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode
-  const cashPortion = r.amount - metalTotal
+  const childPayments: any[] = r.money_receipt_payments ?? []
   const parts: string[] = []
   if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
   if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
-  if (cashPortion > 0.005) parts.unshift(PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode)
-  return parts.join(' + ')
+  if (childPayments.length > 0) {
+    for (const p of childPayments) {
+      parts.unshift(PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode)
+    }
+  } else if (r.payment_mode) {
+    // legacy fallback
+    const cashPortion = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+    if (cashPortion > 0.005 || parts.length === 0) parts.unshift(PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode)
+  }
+  return parts.join(' + ') || '—'
 }
 
 export default function ReportsPage() {
@@ -33,7 +39,7 @@ export default function ReportsPage() {
     const [sessionRes, billsRes, receiptsRes, expensesRes, ogRes, drRes, ppRes, asRes, ratesRes] = await Promise.all([
       supabase.from('day_sessions').select('*').eq('date', reportDate).single(),
       supabase.from('sales_bills').select('*, sales_line_items(*), sales_payments(*), day_sessions!inner(id)').eq('day_sessions.date', reportDate).eq('status', 'approved'),
-      supabase.from('money_receipts').select('*, day_sessions!inner(id)').eq('day_sessions.date', reportDate).eq('status', 'approved'),
+      supabase.from('money_receipts').select('*, money_receipt_payments(*), day_sessions!inner(id)').eq('day_sessions.date', reportDate).eq('status', 'approved'),
       supabase.from('expenses').select('*, day_sessions!inner(id)').eq('day_sessions.date', reportDate).eq('status', 'approved'),
       supabase.from('old_gold_purchases').select('*, day_sessions!inner(id)').eq('day_sessions.date', reportDate).eq('status', 'approved'),
       supabase.from('direct_receipts').select('*, day_sessions!inner(id)').eq('day_sessions.date', reportDate).eq('status', 'approved'),
@@ -63,10 +69,10 @@ export default function ReportsPage() {
 
     const opening = (session.register_a_opening ?? 0) + (session.register_b_opening ?? 0)
     const allPayments = bills.flatMap((b: any) => b.sales_payments ?? [])
-    const receiptNetAmt = (r: any) => r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
-    const receiptByMode = (mode: string) => receipts.filter((r: any) => r.payment_mode === mode).reduce((s: number, r: any) => s + receiptNetAmt(r), 0)
+    const allReceiptPayments = receipts.flatMap((r: any) => r.money_receipt_payments ?? [])
+    const receiptByMode = (mode: string) => allReceiptPayments.filter((p: any) => p.payment_mode === mode).reduce((s: number, p: any) => s + p.amount, 0)
     const cashSales = allPayments.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
-    const cashReceipts = receipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0), 0)
+    const cashReceipts = allReceiptPayments.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.amount, 0)
     const cashExpenses = expenses.filter((e: any) => e.payment_type === 'cash').reduce((s: number, e: any) => s + e.amount, 0)
     const cashOldGoldOut = oldGoldPurchases.filter((p: any) => p.payment_mode === 'cash').reduce((s: number, p: any) => s + p.total_amount, 0)
     const cashDirectIn = directReceipts.filter((r: any) => r.payment_mode === 'cash').reduce((s: number, r: any) => s + r.amount, 0)
@@ -83,12 +89,14 @@ export default function ReportsPage() {
             mode: p.payment_mode, serial: p.reference_serial ?? null, amount: p.amount,
           }))
       ),
-      ...receipts
-        .filter((r: any) => r.payment_mode === 'advance_adjustment' || r.payment_mode === 'sip_adjustment')
-        .map((r: any) => ({
-          source: 'Receipt', customer: r.customer_name, reference: r.serial_number ?? null,
-          mode: r.payment_mode, serial: r.reference_serial ?? null, amount: r.amount,
-        })),
+      ...receipts.flatMap((r: any) =>
+        (r.money_receipt_payments ?? [])
+          .filter((p: any) => p.payment_mode === 'advance_adjustment' || p.payment_mode === 'sip_adjustment')
+          .map((p: any) => ({
+            source: 'Receipt', customer: r.customer_name, reference: r.serial_number ?? null,
+            mode: p.payment_mode, serial: p.reference_serial ?? null, amount: p.amount,
+          }))
+      ),
     ]
 
     const creditEntries = [
@@ -99,13 +107,15 @@ export default function ReportsPage() {
             source: 'Sale', customer: b.customer_name, reference: b.bill_number, amount: p.amount,
           }))
       ),
-      ...receipts
-        .filter((r: any) => r.payment_mode === 'customer_credit')
-        .map((r: any) => ({
-          source: 'Receipt', customer: r.customer_name,
-          reference: r.serial_number ?? null,
-          amount: r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0),
-        })),
+      ...receipts.flatMap((r: any) =>
+        (r.money_receipt_payments ?? [])
+          .filter((p: any) => p.payment_mode === 'customer_credit')
+          .map((p: any) => ({
+            source: 'Receipt', customer: r.customer_name,
+            reference: r.serial_number ?? null,
+            amount: p.amount,
+          }))
+      ),
     ]
 
     setData({

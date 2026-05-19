@@ -12,15 +12,19 @@ function adjSerial(mode: string, serial: string | null | undefined): string {
 }
 
 function receiptSettlementLabel(r: any): string {
-  const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
-  const modeLabel = (PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode) + adjSerial(r.payment_mode, r.reference_serial)
-  if (metalTotal <= 0) return modeLabel
-  const cashPortion = r.amount - metalTotal
+  const childPayments: any[] = r.money_receipt_payments ?? []
   const parts: string[] = []
   if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
   if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
-  if (cashPortion > 0.005) parts.unshift(modeLabel)
-  return parts.join(' + ')
+  if (childPayments.length > 0) {
+    for (const p of childPayments) {
+      parts.unshift((PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode) + adjSerial(p.payment_mode, p.reference_serial))
+    }
+  } else if (r.payment_mode) {
+    const cashPortion = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+    if (cashPortion > 0.005 || parts.length === 0) parts.unshift((PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode) + adjSerial(r.payment_mode, r.reference_serial))
+  }
+  return parts.join(' + ') || '—'
 }
 
 function printLandscape() {
@@ -56,7 +60,7 @@ export default function ArchivalPage() {
     const [sessionRes, bills, receipts, expenses, ogPurchases, drReceipts, partyPayments, approvalSales] = await Promise.all([
       supabase.from('day_sessions').select('id').eq('date', date).single(),
       byDate('sales_bills', '*, sales_line_items(*), sales_payments(*), profiles!submitted_by(name), day_sessions!inner(id)'),
-      byDate('money_receipts', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
+      byDate('money_receipts', '*, money_receipt_payments(*), profiles!submitted_by(name), day_sessions!inner(id)'),
       byDate('expenses', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
       byDate('old_gold_purchases', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
       byDate('direct_receipts', '*, profiles!submitted_by(name), day_sessions!inner(id)'),
@@ -111,15 +115,19 @@ export default function ArchivalPage() {
       return ''
     }
     const settlementPdf = (r: any): string => {
-      const metalTotal = (r.old_gold_amount ?? 0) + (r.old_silver_amount ?? 0)
-      const modeLabel = (PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode) + adjPdf(r.payment_mode, r.reference_serial)
-      if (metalTotal <= 0) return modeLabel
-      const cashPortion = r.amount - metalTotal
+      const childPayments: any[] = r.money_receipt_payments ?? []
       const parts: string[] = []
       if ((r.old_gold_amount ?? 0) > 0) parts.push('Old Gold')
       if ((r.old_silver_amount ?? 0) > 0) parts.push('Old Silver')
-      if (cashPortion > 0.005) parts.unshift(modeLabel)
-      return parts.join(' + ')
+      if (childPayments.length > 0) {
+        for (const p of childPayments) {
+          parts.unshift((PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode) + adjPdf(p.payment_mode, p.reference_serial))
+        }
+      } else if (r.payment_mode) {
+        const cashPortion = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+        if (cashPortion > 0.005 || parts.length === 0) parts.unshift((PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode) + adjPdf(r.payment_mode, r.reference_serial))
+      }
+      return parts.join(' + ') || '-'
     }
 
     doc.setFontSize(13); doc.setFont('helvetica', 'bold')
@@ -187,10 +195,16 @@ export default function ArchivalPage() {
       y = tbl(y,
         [['Type', 'Serial', 'Customer', 'Amount', 'Payment', 'Notes', 'Status']],
         receipts.map((r: any) => {
-          const netCash = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+          const childPayments: any[] = r.money_receipt_payments ?? []
           const parts: string[] = []
-          if (netCash > 0.005)
-            parts.push(`${PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode}${adjPdf(r.payment_mode, r.reference_serial)}: ${pdfAmt(netCash)}`)
+          if (childPayments.length > 0) {
+            for (const p of childPayments) {
+              parts.push(`${PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}${adjPdf(p.payment_mode, p.reference_serial)}: ${pdfAmt(p.amount)}`)
+            }
+          } else if (r.payment_mode) {
+            const netCash = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+            if (netCash > 0.005) parts.push(`${PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode}${adjPdf(r.payment_mode, r.reference_serial)}: ${pdfAmt(netCash)}`)
+          }
           if ((r.old_gold_amount ?? 0) > 0)
             parts.push(`Old Gold${r.old_gold_weight ? ` ${r.old_gold_weight}g` : ''}: ${pdfAmt(r.old_gold_amount)}`)
           if ((r.old_silver_amount ?? 0) > 0)
@@ -432,7 +446,7 @@ export default function ArchivalPage() {
                   </tr></thead>
                   <tbody>
                     {filtered(data.receipts).map((r: any) => {
-                      const netCash = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+                      const childPayments: any[] = r.money_receipt_payments ?? []
                       return (
                         <tr key={r.id} className="border-t border-gray-100">
                           <td className="p-2 capitalize">{r.receipt_type.replace('_', ' ')}</td>
@@ -442,9 +456,14 @@ export default function ArchivalPage() {
                           <td className="p-2">{r.weight ? `${r.weight}g` : '—'}</td>
                           <td className="p-2 text-right font-medium">{formatCurrency(r.amount)}</td>
                           <td className="p-2">
-                            {netCash > 0.005 && (
-                              <div>{PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode}{adjSerial(r.payment_mode, r.reference_serial)}: {formatCurrency(netCash)}</div>
-                            )}
+                            {childPayments.length > 0 ? (
+                              childPayments.map((p: any) => (
+                                <div key={p.id}>{PAYMENT_MODE_LABELS[p.payment_mode] ?? p.payment_mode}{adjSerial(p.payment_mode, p.reference_serial)}: {formatCurrency(p.amount)}</div>
+                              ))
+                            ) : r.payment_mode ? (() => {
+                              const netCash = r.amount - (r.old_gold_amount ?? 0) - (r.old_silver_amount ?? 0)
+                              return netCash > 0.005 ? <div>{PAYMENT_MODE_LABELS[r.payment_mode] ?? r.payment_mode}{adjSerial(r.payment_mode, r.reference_serial)}: {formatCurrency(netCash)}</div> : null
+                            })() : null}
                             {(r.old_gold_amount ?? 0) > 0 && (
                               <div>Old Gold{r.old_gold_weight ? ` ${r.old_gold_weight}g` : ''}: {formatCurrency(r.old_gold_amount)}</div>
                             )}

@@ -79,6 +79,16 @@ export interface SalesPayment {
   reference_serial: string | null
 }
 
+export interface MoneyReceiptPayment {
+  id: string
+  receipt_id: string
+  payment_mode: PaymentMode
+  amount: number
+  cheque_number: string | null
+  reference_serial: string | null
+  created_at: string
+}
+
 export interface MoneyReceipt {
   id: string
   day_session_id: string
@@ -92,7 +102,8 @@ export interface MoneyReceipt {
   old_gold_amount: number | null
   old_silver_weight: number | null
   old_silver_amount: number | null
-  payment_mode: 'cash' | 'card' | 'upi' | 'phonepe' | 'cheque' | 'advance_adjustment' | 'sip_adjustment' | null
+  /** @deprecated use money_receipt_payments child rows instead */
+  payment_mode: 'cash' | 'card' | 'upi' | 'phonepe' | 'cheque' | 'advance_adjustment' | 'sip_adjustment' | 'customer_credit' | null
   cheque_number: string | null
   reference_serial: string | null
   notes: string | null
@@ -101,6 +112,7 @@ export interface MoneyReceipt {
   submitted_at: string
   rejection_reason: string | null
   created_at: string
+  money_receipt_payments?: MoneyReceiptPayment[]
   submitter?: Profile
 }
 
