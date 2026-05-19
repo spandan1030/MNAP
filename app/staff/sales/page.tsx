@@ -12,16 +12,16 @@ function billPrefix() {
 }
 
 // Purity → metal mapping (purity is selected first; metal is derived)
-const PURITY_LIST = ['18K', '22K', '24K', 'Diamond', '75', '925', 'Other'] as const
+const PURITY_LIST = ['18K', '22K', '24K', '24kt', 'Diamond', '75', '925', 'Pure Silver', 'Other'] as const
 type PurityChoice = typeof PURITY_LIST[number]
 const KNOWN_PURITIES = PURITY_LIST.filter(p => p !== 'Other')
 
 type MetalType = 'gold' | 'silver' | 'diamond' | 'other'
 
 function metalForPurity(purity: string): MetalType {
-  if (purity === '18K' || purity === '22K' || purity === '24K') return 'gold'
+  if (purity === '18K' || purity === '22K' || purity === '24K' || purity === '24kt') return 'gold'
   if (purity === 'Diamond') return 'diamond'
-  if (purity === '75' || purity === '925') return 'silver'
+  if (purity === '75' || purity === '925' || purity === 'Pure Silver') return 'silver'
   return 'other'
 }
 
