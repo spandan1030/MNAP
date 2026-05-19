@@ -792,7 +792,7 @@ export default function ReportsPage() {
               ['Gold Weight Sold', `${data.goldWeight.toFixed(3)}g`],
               ['Gold Amount', formatCurrency(data.goldAmount)],
               ...(data.diamondCount > 0 ? [
-                ['Diamond Items', `${data.diamondCount} items — ${formatCurrency(data.diamondAmount)}`],
+                ['Diamond Items', `${data.diamondCount} items — ${formatCurrency(data.diamondAmount)}`] as [string, string],
               ] : []),
               ['Silver Weight Sold', `${data.silverWeight.toFixed(3)}g`],
               ['Silver Amount', formatCurrency(data.silverAmount)],
