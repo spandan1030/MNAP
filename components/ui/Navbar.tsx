@@ -18,6 +18,7 @@ const adminLinks: NavItem[] = [
   { href: '/admin/qc', label: 'QC Review' },
   { href: '/admin/day', label: 'Day Register' },
   { href: '/admin/reports', label: 'Reports' },
+  { href: '/admin/range-report', label: 'Range Report' },
   { href: '/admin/archival', label: 'Archival' },
   { href: '/admin/items', label: 'Item Master' },
   { href: '/admin/rates', label: 'Rates' },
