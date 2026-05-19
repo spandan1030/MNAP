@@ -60,7 +60,11 @@ export default function ReportsPage() {
     const approvalSales = asRes.data ?? []
     setDailyRates(ratesRes.data ?? null)
 
-    const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? [])
+    // Normalise legacy rows: old diamond items were saved as metal_type='gold' + purity='Diamond'
+    const allLineItems = bills.flatMap((b: any) => b.sales_line_items ?? []).map((l: any) => ({
+      ...l,
+      metal_type: (l.metal_type === 'gold' && l.purity === 'Diamond') ? 'diamond' : l.metal_type,
+    }))
     const goldItems = allLineItems.filter((l: any) => l.metal_type === 'gold')
     const diamondItems = allLineItems.filter((l: any) => l.metal_type === 'diamond')
     const silverItems = allLineItems.filter((l: any) => l.metal_type === 'silver')
@@ -541,6 +545,7 @@ export default function ReportsPage() {
             {['gold', 'diamond', 'silver', 'other'].map(metal => {
               const metalItems = data.bills.flatMap((b: any) =>
                 (b.sales_line_items ?? [])
+                  .map((l: any) => ({ ...l, metal_type: (l.metal_type === 'gold' && l.purity === 'Diamond') ? 'diamond' : l.metal_type }))
                   .filter((l: any) => l.metal_type === metal)
                   .map((l: any, lIdx: number) => ({
                     ...l,
