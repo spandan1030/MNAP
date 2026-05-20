@@ -60,6 +60,7 @@ export default function QCPage() {
   const [editData, setEditData] = useState<any>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [dailyRates, setDailyRates] = useState<any>(null)
   const [selectedDetail, setSelectedDetail] = useState<any>(null)
@@ -69,10 +70,10 @@ export default function QCPage() {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
 
-    const q = (table: string) => {
+    const q = (table: string, extra = '') => {
       let query = supabase
         .from(table)
-        .select('*, profiles!submitted_by(name), day_sessions!inner(date)')
+        .select(`*, profiles!submitted_by(name), day_sessions!inner(date)${extra ? `, ${extra}` : ''}`)
         .eq('day_sessions.date', today)
         .order('submitted_at', { ascending: false })
       if (filterStatus !== 'all') query = query.eq('status', filterStatus)
@@ -80,13 +81,13 @@ export default function QCPage() {
     }
 
     const [b, r, e, og, dr, pp, as_] = await Promise.all([
-      filterModule === 'all' || filterModule === 'sales'     ? q('sales_bills')        : { data: [] },
-      filterModule === 'all' || filterModule === 'receipts'  ? q('money_receipts')     : { data: [] },
-      filterModule === 'all' || filterModule === 'expenses'  ? q('expenses')           : { data: [] },
-      filterModule === 'all' || filterModule === 'old_gold'  ? q('old_gold_purchases') : { data: [] },
-      filterModule === 'all' || filterModule === 'direct'    ? q('direct_receipts')    : { data: [] },
-      filterModule === 'all' || filterModule === 'payments'  ? q('party_payments')     : { data: [] },
-      filterModule === 'all' || filterModule === 'approvals' ? q('approval_sales')     : { data: [] },
+      filterModule === 'all' || filterModule === 'sales'     ? q('sales_bills')                              : { data: [] },
+      filterModule === 'all' || filterModule === 'receipts'  ? q('money_receipts')                          : { data: [] },
+      filterModule === 'all' || filterModule === 'expenses'  ? q('expenses')                                : { data: [] },
+      filterModule === 'all' || filterModule === 'old_gold'  ? q('old_gold_purchases')                      : { data: [] },
+      filterModule === 'all' || filterModule === 'direct'    ? q('direct_receipts')                         : { data: [] },
+      filterModule === 'all' || filterModule === 'payments'  ? q('party_payments')                          : { data: [] },
+      filterModule === 'all' || filterModule === 'approvals' ? q('approval_sales', 'approval_sale_items(id)') : { data: [] },
     ])
 
     setBills(b.data ?? [])
@@ -135,11 +136,13 @@ export default function QCPage() {
     setSelected(null); setEditMode(false); setEditData(null); setEditReason('')
     setRejectReason(''); setSendBackReason('')
     setDailyRates(null); setSelectedDetail(null); setLoadingDetail(false)
+    setErrorMessage('')
   }
 
   async function handleApprove(type: string, id: string) {
     setActionLoading(true)
-    await supabase.from(getTableName(type)).update({ status: 'approved' }).eq('id', id)
+    const { error } = await supabase.from(getTableName(type)).update({ status: 'approved' }).eq('id', id)
+    if (error) { setErrorMessage('Failed to approve entry. Please try again.'); setActionLoading(false); return }
     setMessage('Entry approved.')
     closeModal()
     await fetchEntries()
@@ -149,7 +152,8 @@ export default function QCPage() {
   async function handleReject(type: string, id: string) {
     if (!rejectReason.trim()) { setMessage('Please enter a rejection reason.'); return }
     setActionLoading(true)
-    await supabase.from(getTableName(type)).update({ status: 'rejected', rejection_reason: rejectReason }).eq('id', id)
+    const { error } = await supabase.from(getTableName(type)).update({ status: 'rejected', rejection_reason: rejectReason }).eq('id', id)
+    if (error) { setErrorMessage('Failed to reject entry. Please try again.'); setActionLoading(false); return }
     setMessage('Entry rejected.')
     setRejectReason('')
     closeModal()
@@ -159,7 +163,8 @@ export default function QCPage() {
 
   async function handleSendBack(type: string, id: string) {
     setActionLoading(true)
-    await supabase.from(getTableName(type)).update({ status: 'sent_back', send_back_reason: sendBackReason.trim() || null }).eq('id', id)
+    const { error } = await supabase.from(getTableName(type)).update({ status: 'sent_back', send_back_reason: sendBackReason.trim() || null }).eq('id', id)
+    if (error) { setErrorMessage('Failed to send back entry. Please try again.'); setActionLoading(false); return }
     setMessage('Entry sent back to staff for correction.')
     setSendBackReason('')
     closeModal()
@@ -196,15 +201,21 @@ export default function QCPage() {
       }
     }
 
-    if (auditRows.length === 0) {
-      setEditMode(false)
-      setActionLoading(false)
-      return
+    const { error: updateError } = await supabase.from(getTableName(selected.type)).update(updateObj).eq('id', selected.data.id)
+    if (updateError) { setErrorMessage('Failed to save changes. Please try again.'); setActionLoading(false); return }
+
+    if (auditRows.length > 0) {
+      const { error: auditError } = await supabase.from('audit_log').insert(auditRows)
+      if (auditError) {
+        setMessage(`Entry approved — ${auditRows.length} field(s) changed. (Audit log could not be saved)`)
+        closeModal()
+        await fetchEntries()
+        setActionLoading(false)
+        return
+      }
     }
 
-    await supabase.from(getTableName(selected.type)).update(updateObj).eq('id', selected.data.id)
-    await supabase.from('audit_log').insert(auditRows)
-    setMessage(`Entry updated — ${auditRows.length} field(s) changed.`)
+    setMessage(auditRows.length > 0 ? `Entry approved — ${auditRows.length} field(s) changed.` : 'Entry approved.')
     closeModal()
     await fetchEntries()
     setActionLoading(false)
@@ -250,8 +261,9 @@ export default function QCPage() {
               onOpen={() => {
                 setSelected({ type, data })
                 setSelectedDetail(null)
-                setRejectReason(''); setEditReason(''); setMessage('')
+                setRejectReason(''); setEditReason(''); setMessage(''); setErrorMessage('')
                 setEditMode(false); setEditData(null)
+                setAuditLog([])
                 loadAuditLog(data.id)
                 loadEntryDetail(type, data.id)
                 if (type === 'sales') fetchDailyRates()
@@ -275,6 +287,9 @@ export default function QCPage() {
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
               {loadingDetail && (
                 <div className="text-xs text-gray-400 animate-pulse">Loading entry details…</div>
+              )}
+              {errorMessage && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">{errorMessage}</div>
               )}
               <div className="flex items-center gap-2">
                 <StatusBadge status={selected.data.status} />
@@ -356,22 +371,26 @@ export default function QCPage() {
                       className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-sm font-semibold py-2 rounded-lg">
                       ✎ Edit Entry
                     </button>
-                    <div className="space-y-2">
-                      <input value={sendBackReason} onChange={e => setSendBackReason(e.target.value)}
-                        placeholder="Reason for sending back (optional)" className="input text-sm" />
-                      <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading}
-                        className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
-                        ↩ Send Back to Staff
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-                        placeholder="Rejection reason (required to reject)" className="input text-sm" />
-                      <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
-                        className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
-                        ✗ Reject
-                      </button>
-                    </div>
+                    {selected.data.status !== 'approved' && (
+                      <>
+                        <div className="space-y-2">
+                          <input value={sendBackReason} onChange={e => setSendBackReason(e.target.value)}
+                            placeholder="Reason for sending back (optional)" className="input text-sm" />
+                          <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading}
+                            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                            ↩ Send Back to Staff
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                            placeholder="Rejection reason (required to reject)" className="input text-sm" />
+                          <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
+                            className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                            ✗ Reject
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </>
               )}
@@ -469,7 +488,7 @@ function getRateForItem(item: any, rates: any): { rate: number; label: string } 
   if (!rates || !item.weight) return null
   if (item.metal_type === 'silver') return rates.rate_silver ? { rate: rates.rate_silver, label: 'Silver' } : null
   if (item.metal_type === 'gold') {
-    if (item.purity === '24K' && rates.rate_24kt) return { rate: rates.rate_24kt, label: '24 KT' }
+    if ((item.purity === '24K' || item.purity === '24kt') && rates.rate_24kt) return { rate: rates.rate_24kt, label: '24 KT' }
     if (item.purity === '22K' && rates.rate_22kt) return { rate: rates.rate_22kt, label: '22 KT' }
     if (item.purity === '18K' && rates.rate_18kt) return { rate: rates.rate_18kt, label: '18 KT' }
   }
