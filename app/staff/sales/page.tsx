@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { Toast } from '@/components/ui/Toast'
+import { useStaffSession } from '../session-context'
 
 function billPrefix() {
   const n = new Date()
@@ -73,9 +74,9 @@ const defaultPayment = (): Payment => ({
 
 export default function SalesPage() {
   const supabase = createClient()
+  const { sessionId, userId } = useStaffSession()
 
   const [items, setItems] = useState<string[]>([])
-  const [sessionId, setSessionId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -94,25 +95,19 @@ export default function SalesPage() {
   const [oldSilverWeight, setOldSilverWeight] = useState('')
   const [oldSilverAmount, setOldSilverAmount] = useState('')
 
-  useEffect(() => { loadItemsAndSession() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    supabase.from('item_master').select('name').eq('is_active', true).order('name')
+      .then(({ data }) => setItems((data ?? []).map((i: { name: string }) => i.name)))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function loadItemsAndSession() {
-    const today = new Date().toISOString().split('T')[0]
-    const [itemsRes, sessionRes] = await Promise.all([
-      supabase.from('item_master').select('name').eq('is_active', true).order('name'),
-      supabase.from('day_sessions').select('id, status').eq('date', today).eq('status', 'open').single(),
-    ])
-    setItems((itemsRes.data ?? []).map((i: { name: string }) => i.name))
-    const sid = sessionRes.data?.id ?? null
-    setSessionId(sid)
-    if (sid) loadSentBack(sid)
-  }
+  useEffect(() => {
+    if (sessionId && userId) loadSentBack(sessionId, userId)
+  }, [sessionId, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function loadSentBack(sid: string) {
-    const { data: { user } } = await supabase.auth.getUser()
+  async function loadSentBack(sid: string, uid: string) {
     const { data } = await supabase.from('sales_bills')
       .select('id, bill_number, customer_name, total_amount, send_back_reason, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount')
-      .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', user!.id)
+      .eq('day_session_id', sid).eq('status', 'sent_back').eq('submitted_by', uid)
     setSentBackEntries(data ?? [])
   }
 
@@ -213,7 +208,6 @@ export default function SalesPage() {
     if (lineItems.some(l => l.party === 'custom' && !l.party_custom.trim())) { setError('Enter party name for outside party items.'); return }
 
     setSubmitting(true)
-    const { data: { user } } = await supabase.auth.getUser()
 
     const firstItem = lineItems[0]
     const billParty = firstItem.party === 'MNAP' ? 'MNAP' : firstItem.party_custom
@@ -270,7 +264,7 @@ export default function SalesPage() {
       setSuccess(true)
       setSubmitting(false)
       cancelEdit()
-      await loadSentBack(sessionId)
+      await loadSentBack(sessionId!, userId!)
       return
     }
 
@@ -280,7 +274,7 @@ export default function SalesPage() {
       day_session_id: sessionId,
       bill_number: billPrefix() + billNumber,
       customer_phone: null,
-      submitted_by: user!.id,
+      submitted_by: userId!,
     }).select('id').single()
 
     if (billErr || !bill) { setError(billErr?.message ?? 'Failed to save bill.'); setSubmitting(false); return }

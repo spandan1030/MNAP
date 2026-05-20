@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Toast } from '@/components/ui/Toast'
+import { useStaffSession } from '../session-context'
 
 const PAYMENT_MODES = [
   { value: 'cash', label: 'Cash' },
@@ -15,8 +16,7 @@ const PAYMENT_MODES = [
 
 export default function DirectReceiptPage() {
   const supabase = createClient()
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
+  const { sessionId, userId } = useStaffSession()
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -30,19 +30,9 @@ export default function DirectReceiptPage() {
   const [paymentMode, setPaymentMode] = useState('cash')
   const [notes, setNotes] = useState('')
 
-  useEffect(() => { init() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function init() {
-    const today = new Date().toISOString().split('T')[0]
-    const [{ data: sessionData }, { data: { user } }] = await Promise.all([
-      supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
-      supabase.auth.getUser(),
-    ])
-    const sid = sessionData?.id ?? null
-    setSessionId(sid)
-    setUserId(user?.id ?? null)
-    if (sid && user) await loadSentBack(sid, user.id)
-  }
+  useEffect(() => {
+    if (sessionId && userId) loadSentBack(sessionId, userId)
+  }, [sessionId, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadSentBack(sid: string, uid: string) {
     const { data } = await supabase.from('direct_receipts')

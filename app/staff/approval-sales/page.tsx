@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Toast } from '@/components/ui/Toast'
+import { useStaffSession } from '../session-context'
 
 // ── Purity → metal mapping (same as Module A / New Sale) ──────────────────
 const PURITY_LIST = ['18K', '22K', '24K', '24kt', 'Diamond', '75', '925', 'Pure Silver', 'Other'] as const
@@ -59,8 +60,7 @@ const TX_LABELS: Record<string, string> = {
 
 export default function ApprovalSalesPage() {
   const supabase = createClient()
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
+  const { sessionId, userId } = useStaffSession()
   const [items, setItems] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -73,20 +73,18 @@ export default function ApprovalSalesPage() {
   const [transactionType, setTransactionType] = useState<'sale' | 'approval' | 'approval_return' | 'stock_in'>('approval')
   const [lineItems, setLineItems] = useState<LineItem[]>([defaultLine()])
 
-  useEffect(() => { loadData() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    supabase.from('item_master').select('name').eq('is_active', true).order('name')
+      .then(({ data }) => setItems((data ?? []).map((i: { name: string }) => i.name)))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (sessionId && userId) loadSentBack(sessionId, userId)
+  }, [sessionId, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
-    const today = new Date().toISOString().split('T')[0]
-    const [sessionRes, itemsRes, { data: { user } }] = await Promise.all([
-      supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
-      supabase.from('item_master').select('name').eq('is_active', true).order('name'),
-      supabase.auth.getUser(),
-    ])
-    const sid = sessionRes.data?.id ?? null
-    setSessionId(sid)
-    setUserId(user?.id ?? null)
-    setItems((itemsRes.data ?? []).map((i: { name: string }) => i.name))
-    if (sid && user) await loadSentBack(sid, user.id)
+    // kept as stub in case referenced elsewhere
+    return
   }
 
   async function loadSentBack(sid: string, uid: string) {
@@ -187,13 +185,11 @@ export default function ApprovalSalesPage() {
       return
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
-
     const { data: sale, error: saleErr } = await supabase.from('approval_sales').insert({
       day_session_id: sessionId,
       party_name: partyName,
       transaction_type: transactionType,
-      submitted_by: user!.id,
+      submitted_by: userId!,
     }).select('id').single()
 
     if (saleErr || !sale) { setError(saleErr?.message ?? 'Failed to save entry.'); setSubmitting(false); return }

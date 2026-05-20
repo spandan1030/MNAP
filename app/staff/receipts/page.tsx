@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { PAYMENT_MODE_LABELS } from '@/lib/utils'
 import { Toast } from '@/components/ui/Toast'
+import { useStaffSession } from '../session-context'
 
 type ReceiptType = 'advance' | 'sip' | 'customer_credit' | 'repair'
 const RECEIPT_LABELS: Record<ReceiptType, string> = {
@@ -27,9 +28,8 @@ const defaultPayment = (): ReceiptPayment => ({
 
 export default function ReceiptsPage() {
   const supabase = createClient()
+  const { sessionId, userId } = useStaffSession()
   const [receiptType, setReceiptType] = useState<ReceiptType>('advance')
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -59,17 +59,6 @@ export default function ReceiptsPage() {
   const fullyByMetal = total > 0 && metalTotal >= total
   const amountMismatch = total > 0 && !fullyByMetal && Math.abs(totalPaid + metalTotal - total) > 0.01
 
-  async function loadSession() {
-    const today = new Date().toISOString().split('T')[0]
-    const [{ data: sessionData }, { data: { user } }] = await Promise.all([
-      supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
-      supabase.auth.getUser(),
-    ])
-    const sid = sessionData?.id ?? null
-    setSessionId(sid)
-    setUserId(user?.id ?? null)
-    if (sid && user) await loadSentBack(sid, user.id)
-  }
 
   async function loadSentBack(sid: string, uid: string) {
     const { data } = await supabase.from('money_receipts')
@@ -134,7 +123,9 @@ export default function ReceiptsPage() {
     setPayments(prev => prev.filter((_, idx) => idx !== i))
   }
 
-  useEffect(() => { loadSession() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (sessionId && userId) loadSentBack(sessionId, userId)
+  }, [sessionId, userId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

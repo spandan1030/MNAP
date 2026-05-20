@@ -70,24 +70,37 @@ export default function QCPage() {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
 
-    const q = (table: string, extra = '') => {
-      let query = supabase
-        .from(table)
-        .select(`*, profiles!submitted_by(name), day_sessions!inner(date)${extra ? `, ${extra}` : ''}`)
+    const q = (table: string, cols: string) => {
+      let query = supabase.from(table).select(cols)
         .eq('day_sessions.date', today)
         .order('submitted_at', { ascending: false })
       if (filterStatus !== 'all') query = query.eq('status', filterStatus)
       return query
     }
 
+    const BASE = 'id, status, submitted_at, rejection_reason, send_back_reason, profiles!submitted_by(name), day_sessions!inner(date)'
     const [b, r, e, og, dr, pp, as_] = await Promise.all([
-      filterModule === 'all' || filterModule === 'sales'     ? q('sales_bills')                              : { data: [] },
-      filterModule === 'all' || filterModule === 'receipts'  ? q('money_receipts')                          : { data: [] },
-      filterModule === 'all' || filterModule === 'expenses'  ? q('expenses')                                : { data: [] },
-      filterModule === 'all' || filterModule === 'old_gold'  ? q('old_gold_purchases')                      : { data: [] },
-      filterModule === 'all' || filterModule === 'direct'    ? q('direct_receipts')                         : { data: [] },
-      filterModule === 'all' || filterModule === 'payments'  ? q('party_payments')                          : { data: [] },
-      filterModule === 'all' || filterModule === 'approvals' ? q('approval_sales', 'approval_sale_items(id)') : { data: [] },
+      filterModule === 'all' || filterModule === 'sales'
+        ? q('sales_bills',       `${BASE}, bill_number, total_amount, customer_name, customer_phone, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount`)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'receipts'
+        ? q('money_receipts',    `${BASE}, receipt_type, customer_name, serial_number, repair_type, weight, amount, old_gold_weight, old_gold_amount, old_silver_weight, old_silver_amount, notes, payment_mode`)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'expenses'
+        ? q('expenses',          `${BASE}, description, amount, payment_type, notes`)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'old_gold'
+        ? q('old_gold_purchases',`${BASE}, customer_name, customer_phone, metal_type, purity, weight, rate_per_gram, total_amount, payment_mode, notes`)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'direct'
+        ? q('direct_receipts',   `${BASE}, customer_name, customer_number, amount, payment_mode, notes`)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'payments'
+        ? q('party_payments',    `${BASE}, party_name, amount, payment_mode, notes`)
+        : { data: [] },
+      filterModule === 'all' || filterModule === 'approvals'
+        ? q('approval_sales',    `${BASE}, party_name, transaction_type, approval_sale_items(count)`)
+        : { data: [] },
     ])
 
     setBills(b.data ?? [])
@@ -433,7 +446,7 @@ function EntryRow({ type, data, onOpen }: { type: string; data: any; onOpen: () 
         <span className="text-sm font-semibold text-gray-700">
           {(data.total_amount != null || data.amount != null)
             ? formatCurrency(data.total_amount ?? data.amount)
-            : `${(data.approval_sale_items ?? []).length} item(s)`}
+            : `${parseInt(data.approval_sale_items?.[0]?.count ?? '0')} item(s)`}
         </span>
         <StatusBadge status={data.status} />
       </div>
