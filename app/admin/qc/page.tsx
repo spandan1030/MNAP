@@ -384,26 +384,22 @@ export default function QCPage() {
                       className="w-full bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-sm font-semibold py-2 rounded-lg">
                       ✎ Edit Entry
                     </button>
-                    {selected.data.status !== 'approved' && (
-                      <>
-                        <div className="space-y-2">
-                          <input value={sendBackReason} onChange={e => setSendBackReason(e.target.value)}
-                            placeholder="Reason for sending back (optional)" className="input text-sm" />
-                          <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading}
-                            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
-                            ↩ Send Back to Staff
-                          </button>
-                        </div>
-                        <div className="space-y-2">
-                          <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
-                            placeholder="Rejection reason (required to reject)" className="input text-sm" />
-                          <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
-                            className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
-                            ✗ Reject
-                          </button>
-                        </div>
-                      </>
-                    )}
+                    <div className="space-y-2">
+                      <input value={sendBackReason} onChange={e => setSendBackReason(e.target.value)}
+                        placeholder="Reason for sending back (optional)" className="input text-sm" />
+                      <button onClick={() => handleSendBack(selected.type, selected.data.id)} disabled={actionLoading}
+                        className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                        ↩ Send Back to Staff
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <input value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                        placeholder="Rejection reason (required to reject)" className="input text-sm" />
+                      <button onClick={() => handleReject(selected.type, selected.data.id)} disabled={actionLoading || !rejectReason.trim()}
+                        className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 text-white text-sm font-semibold py-2 rounded-lg">
+                        ✗ Reject
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
