@@ -9,10 +9,9 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const today = new Date().toISOString().split('T')[0]
   const [{ data: profile }, { data: sessionData }] = await Promise.all([
     supabase.from('profiles').select('role, name').eq('id', user.id).single(),
-    supabase.from('day_sessions').select('id').eq('date', today).eq('status', 'open').single(),
+    supabase.from('day_sessions').select('id').eq('status', 'open').order('date', { ascending: false }).limit(1).single(),
   ])
 
   if (!profile) redirect('/login')
