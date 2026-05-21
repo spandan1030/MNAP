@@ -40,7 +40,7 @@ export default async function StaffHome() {
           ...(receipts.data ?? []).filter((r: any) => r.status === 'sent_back').map((r: any) => ({ label: `Receipt — ${r.receipt_type}`, reason: r.send_back_reason, href: '/staff/receipts' })),
           ...(expenses.data ?? []).filter((e: any) => e.status === 'sent_back').map((e: any) => ({ label: `Expense — ${e.description}`, reason: e.send_back_reason, href: '/staff/expenses' })),
           ...(ogPurchases.data ?? []).filter((p: any) => p.status === 'sent_back').map((p: any) => ({ label: `Old Metal — ${p.customer_name}`, reason: p.send_back_reason, href: '/staff/old-gold-purchase' })),
-          ...(drReceipts.data ?? []).filter((r: any) => r.status === 'sent_back').map((r: any) => ({ label: `Direct Receipt — ${r.customer_name}`, reason: r.send_back_reason, href: '/staff/direct-receipt' })),
+          ...(drReceipts.data ?? []).filter((r: any) => r.status === 'sent_back').map((r: any) => ({ label: `Direct Cash Receipt — ${r.customer_name}`, reason: r.send_back_reason, href: '/staff/direct-receipt' })),
           ...(partyPayments.data ?? []).filter((p: any) => p.status === 'sent_back').map((p: any) => ({ label: `Payment — ${p.party_name}`, reason: p.send_back_reason, href: '/staff/payments' })),
           ...(approvalSales.data ?? []).filter((s: any) => s.status === 'sent_back').map((s: any) => ({ label: `Approval — ${s.party_name}`, reason: s.send_back_reason, href: '/staff/approval-sales' })),
         ]
@@ -69,7 +69,7 @@ export default async function StaffHome() {
         <ActionCard href="/staff/receipts" label="Money Receipt" icon="💰" />
         <ActionCard href="/staff/expenses" label="Expense" icon="📋" />
         <ActionCard href="/staff/old-gold-purchase" label="Old Metal Purchase" icon="🥇" />
-        <ActionCard href="/staff/direct-receipt" label="Direct Receipt" icon="📥" />
+        <ActionCard href="/staff/direct-receipt" label="Direct Cash Receipt" icon="📥" />
         <ActionCard href="/staff/payments" label="Payment" icon="💸" />
         <ActionCard href="/staff/approval-sales" label="Approval/Party Sale/Stock In" icon="🤝" />
       </div>
@@ -84,7 +84,7 @@ export default async function StaffHome() {
         <RecentList title="Recent Old Metal Purchases" items={(ogPurchases.data ?? []).map(p => ({
           id: p.id, label: p.customer_name, value: `₹${p.total_amount}`, status: p.status, time: p.submitted_at
         }))} />
-        <RecentList title="Recent Direct Receipts" items={(drReceipts.data ?? []).map(r => ({
+        <RecentList title="Recent Direct Cash Receipts" items={(drReceipts.data ?? []).map(r => ({
           id: r.id, label: r.customer_name, value: `₹${r.amount}`, status: r.status, time: r.submitted_at
         }))} />
         <RecentList title="Recent Expenses" items={(expenses.data ?? []).map(e => ({

@@ -303,7 +303,7 @@ export default function ReportsPage() {
     if (y > 220) { doc.addPage(); y = 15 }
 
     // Section 5 — Direct Receipts
-    heading('Section 5 — Direct Money Receipts')
+    heading('Section 5 — Direct Cash Receipts')
     const drRows = data.directReceipts.map((r: any) => [
       r.customer_name, r.customer_number ?? '—',
       pdfAmt(r.amount),
@@ -317,7 +317,7 @@ export default function ReportsPage() {
         body: drRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 },
       })
       y = (doc as any).lastAutoTable.finalY + 8
-    } else { noRecords('No direct receipts today.') }
+    } else { noRecords('No direct cash receipts today.') }
 
     if (y > 220) { doc.addPage(); y = 15 }
 
@@ -463,7 +463,7 @@ export default function ReportsPage() {
         ['Combined Opening', pdfAmt(data.opening)],
         ['Cash from Sales', pdfAmt(data.cashSales)],
         ['Cash from Money Receipts', pdfAmt(data.cashReceipts)],
-        ['Cash from Direct Receipts', pdfAmt(data.cashDirectIn)],
+        ['Cash from Direct Cash Receipts', pdfAmt(data.cashDirectIn)],
         ['Cash Expenses', `- ${pdfAmt(data.cashExpenses)}`],
         ['Cash Old Metal Purchases', `- ${pdfAmt(data.cashOldGoldOut)}`],
         ['Cash Payments to Parties', `- ${pdfAmt(data.cashPartyPayOut)}`],
@@ -762,10 +762,10 @@ export default function ReportsPage() {
             )}
           </ReportSection>
 
-          {/* Section 5 — Direct Money Receipts */}
-          <ReportSection title="Section 5 — Direct Money Receipts">
+          {/* Section 5 — Direct Cash Receipts */}
+          <ReportSection title="Section 5 — Direct Cash Receipts">
             {data.directReceipts.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-2">No direct receipts today.</p>
+              <p className="text-sm text-gray-400 text-center py-2">No direct cash receipts today.</p>
             ) : (
               <table className="w-full text-xs border-collapse">
                 <thead><tr className="bg-gray-50">
@@ -786,7 +786,7 @@ export default function ReportsPage() {
                     </tr>
                   ))}
                   <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold text-sm">
-                    <td colSpan={2} className="p-2">Total Direct Receipts</td>
+                    <td colSpan={2} className="p-2">Total Direct Cash Receipts</td>
                     <td className="p-2 text-right">{formatCurrency(data.totalDirectReceipts)}</td>
                     <td colSpan={2} />
                   </tr>
@@ -989,7 +989,7 @@ export default function ReportsPage() {
               ['Combined Opening Balance', formatCurrency(data.opening)],
               ['Cash from Sales', formatCurrency(data.cashSales)],
               ['Cash from Money Receipts', formatCurrency(data.cashReceipts)],
-              ['Cash from Direct Receipts', formatCurrency(data.cashDirectIn)],
+              ['Cash from Direct Cash Receipts', formatCurrency(data.cashDirectIn)],
               ['Cash Expenses', `− ${formatCurrency(data.cashExpenses)}`],
               ['Cash Old Metal Purchases', `− ${formatCurrency(data.cashOldGoldOut)}`],
               ['Cash Payments to Parties', `− ${formatCurrency(data.cashPartyPayOut)}`],

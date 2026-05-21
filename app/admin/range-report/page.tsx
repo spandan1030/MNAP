@@ -284,7 +284,7 @@ export default function RangeReportPage() {
     if (y > 220) { doc.addPage(); y = 15 }
 
     // Section 5 — Direct Receipts
-    heading('Section 5 — Direct Money Receipts')
+    heading('Section 5 — Direct Cash Receipts')
     const drRows: any[] = []
     for (const day of data.perDay) {
       if (day.directReceipts.length === 0) continue
@@ -297,7 +297,7 @@ export default function RangeReportPage() {
       drRows.push(['', 'TOTAL', pdfAmt(data.totalDirectReceipts), '', ''])
       autoTable(doc, { startY: y, head: [['Customer', 'Phone / Ref', 'Amount', 'Payment', 'Notes']], body: drRows, styles: { fontSize: 7 }, headStyles: { fillColor: [251, 191, 36] }, margin: { left: 14, right: 14 } })
       y = (doc as any).lastAutoTable.finalY + 8
-    } else { noRecords('No direct receipts in this period.') }
+    } else { noRecords('No direct cash receipts in this period.') }
 
     if (y > 220) { doc.addPage(); y = 15 }
 
@@ -714,10 +714,10 @@ export default function RangeReportPage() {
             )}
           </ReportSection>
 
-          {/* Section 5 — Direct Money Receipts */}
-          <ReportSection title="Section 5 — Direct Money Receipts">
+          {/* Section 5 — Direct Cash Receipts */}
+          <ReportSection title="Section 5 — Direct Cash Receipts">
             {data.directReceipts.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-2">No direct receipts in this period.</p>
+              <p className="text-sm text-gray-400 text-center py-2">No direct cash receipts in this period.</p>
             ) : (
               <>
                 {data.perDay.map((day: any) => {
@@ -747,7 +747,7 @@ export default function RangeReportPage() {
                   )
                 })}
                 <div className="flex justify-between font-semibold text-sm border-t-2 border-gray-300 pt-2 mt-2">
-                  <span>Total Direct Receipts</span>
+                  <span>Total Direct Cash Receipts</span>
                   <span>{formatCurrency(data.totalDirectReceipts)}</span>
                 </div>
               </>

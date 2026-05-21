@@ -5,15 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 import { Toast } from '@/components/ui/Toast'
 import { useStaffSession } from '../session-context'
 
-const PAYMENT_MODES = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'phonepe', label: 'PhonePe' },
-  { value: 'card', label: 'Card' },
-  { value: 'cheque', label: 'Cheque' },
-  { value: 'bank_transfer', label: 'Bank Transfer' },
-]
-
 export default function DirectReceiptPage() {
   const supabase = createClient()
   const { sessionId, userId } = useStaffSession()
@@ -27,7 +18,6 @@ export default function DirectReceiptPage() {
   const [customerName, setCustomerName] = useState('')
   const [customerNumber, setCustomerNumber] = useState('')
   const [amount, setAmount] = useState('')
-  const [paymentMode, setPaymentMode] = useState('cash')
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
@@ -45,7 +35,6 @@ export default function DirectReceiptPage() {
     setCustomerName(entry.customer_name ?? '')
     setCustomerNumber(entry.customer_number ?? '')
     setAmount(entry.amount?.toString() ?? '')
-    setPaymentMode(entry.payment_mode ?? 'cash')
     setNotes(entry.notes ?? '')
     setEditingId(entry.id)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -53,7 +42,7 @@ export default function DirectReceiptPage() {
 
   function cancelEdit() {
     setEditingId(null)
-    setCustomerName(''); setCustomerNumber(''); setAmount(''); setPaymentMode('cash'); setNotes('')
+    setCustomerName(''); setCustomerNumber(''); setAmount(''); setNotes('')
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -67,7 +56,7 @@ export default function DirectReceiptPage() {
       customer_name: customerName,
       customer_number: customerNumber || null,
       amount: parseFloat(amount),
-      payment_mode: paymentMode,
+      payment_mode: 'cash',
       notes: notes || null,
     }
 
@@ -82,29 +71,28 @@ export default function DirectReceiptPage() {
         setSuccess(true)
         setEditingId(null)
         await loadSentBack(sessionId, userId!)
-        setCustomerName(''); setCustomerNumber(''); setAmount(''); setPaymentMode('cash'); setNotes('')
+        setCustomerName(''); setCustomerNumber(''); setAmount(''); setNotes('')
         setTimeout(() => setSuccess(false), 3000)
       }
       setSubmitting(false)
       return
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
     const { error: err } = await supabase.from('direct_receipts').insert({
       ...payload,
       day_session_id: sessionId,
-      submitted_by: user!.id,
+      submitted_by: userId!,
     })
     if (err) { setError(err.message); setSubmitting(false); return }
     setSuccess(true)
     setSubmitting(false)
-    setCustomerName(''); setCustomerNumber(''); setAmount(''); setPaymentMode('cash'); setNotes('')
+    setCustomerName(''); setCustomerNumber(''); setAmount(''); setNotes('')
     setTimeout(() => setSuccess(false), 3000)
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Direct Money Receipt — Module F</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Direct Cash Receipt — Module F</h1>
 
       <Toast show={success} message={editingId ? 'Entry resubmitted for admin review.' : 'Entry submitted successfully and is pending admin review.'} />
 
@@ -148,12 +136,6 @@ export default function DirectReceiptPage() {
           <div>
             <label className="label">Amount (₹) *</label>
             <input type="number" step="0.01" min="0" value={amount} onChange={e => setAmount(e.target.value)} className="input" required />
-          </div>
-          <div>
-            <label className="label">Payment Mode *</label>
-            <select value={paymentMode} onChange={e => setPaymentMode(e.target.value)} className="input">
-              {PAYMENT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
           </div>
         </div>
         <div>

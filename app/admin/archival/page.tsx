@@ -261,7 +261,7 @@ export default function ArchivalPage() {
     if (y > 170) { doc.addPage(); y = 14 }
     const drReceipts = filtered(data.drReceipts)
     if (drReceipts.length > 0) {
-      hdr(`Direct Receipts - ${drReceipts.length} entries`)
+      hdr(`Direct Cash Receipts - ${drReceipts.length} entries`)
       y = tbl(y,
         [['Customer', 'Ref', 'Amount', 'Payment', 'Notes', 'Status']],
         drReceipts.map((r: any) => [
@@ -535,7 +535,7 @@ export default function ArchivalPage() {
             )}
           </Section>
 
-          {/* Direct Receipts */}
+          {/* Direct Cash Receipts */}
           <Section title={`Direct Money Receipts (Module F) — ${filtered(data.drReceipts).length} entries`}>
             {filtered(data.drReceipts).length === 0 ? <Empty /> : (
               <div className="overflow-x-auto">

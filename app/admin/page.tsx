@@ -86,7 +86,7 @@ export default async function AdminDashboard() {
         <StatCard label="Today's Sales" value={formatCurrency(todaySales)} />
         <StatCard label="Today's Expenses" value={formatCurrency(todayExpenses)} />
         <StatCard label="Today's Money Receipts" value={formatCurrency(todayReceipts)} />
-        <StatCard label="Today's Direct Receipts" value={formatCurrency(todayDirectReceipts)} />
+        <StatCard label="Today's Direct Cash Receipts" value={formatCurrency(todayDirectReceipts)} />
         <StatCard label="Today's Payments" value={formatCurrency(todayPayments)} />
       </div>
 
